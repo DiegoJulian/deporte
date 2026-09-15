@@ -33,4 +33,5 @@ export * from './calibration/index.js';
 export * from './calibration/clv.js';
 export * from './adapters/flashscore.js';
 export * from './adapters/analysis.js';
+export * from './adapters/panel.js';
 export * from './pipeline.js';
