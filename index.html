@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cuota Justa</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AF%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&family=Instrument+Sans:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/panel.css">
+
+<!-- El tema del panel. La paleta oscura llevaba escrita desde el principio y no
+     había manera de llegar a ella: era código muerto. Ahora la elige el botón de la
+     cabecera y, mientras nadie elija, manda la del sistema. Este trozo va aquí
+     arriba, antes del cuerpo, para que el tema esté puesto antes del primer pintado
+     y no se vea el salto de claro a oscuro. -->
+<script>
+(function(){
+  var t = null;
+  try { t = localStorage.getItem('cuotajusta.tema'); } catch (e) {}
+  if (t !== 'dark' && t !== 'light'){
+    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-panel-theme', t);
+})();
+</script>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><b>Cuota Justa</b></div>
+
+    <!-- Los tres botones redondos van a la IZQUIERDA del refresco (14-09-2026,
+         a petición de Diego). El refresco y el badge quedan juntos al final: son
+         los dos que hablan de lo mismo, de si el panel tiene datos frescos. -->
+    <button class="ajustes" id="temaBtn" type="button" title="" aria-label="Cambiar entre tema claro y oscuro">
+      <svg id="temaIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg>
+    </button>
+    <button class="ajustes" id="infoBtn" type="button" aria-haspopup="dialog" aria-expanded="false"
+            aria-controls="infoModal" title="La ruta agresiva etapa a etapa" aria-label="Información: la ruta agresiva etapa a etapa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.2"/>
+        <path d="M12 11.3v4.9"/>
+        <circle cx="12" cy="7.9" r="1.05" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+    <button class="ajustes" id="apisBtn" type="button" aria-haspopup="dialog" aria-expanded="false"
+            aria-controls="apisModal" title="Ver las APIs y fuentes de datos que usa el panel" aria-label="Configuración: APIs y fuentes de datos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.1"/>
+        <path d="M19.5 14.5a1.55 1.55 0 0 0 .31 1.71l.06.06a1.9 1.9 0 1 1-2.69 2.69l-.06-.06a1.55 1.55 0 0 0-1.71-.31 1.55 1.55 0 0 0-.94 1.42v.17a1.9 1.9 0 0 1-3.8 0v-.09a1.55 1.55 0 0 0-1-1.42 1.55 1.55 0 0 0-1.71.31l-.06.06a1.9 1.9 0 1 1-2.69-2.69l.06-.06a1.55 1.55 0 0 0 .31-1.71 1.55 1.55 0 0 0-1.42-.94H3.9a1.9 1.9 0 0 1 0-3.8h.09a1.55 1.55 0 0 0 1.42-1 1.55 1.55 0 0 0-.31-1.71l-.06-.06a1.9 1.9 0 1 1 2.69-2.69l.06.06a1.55 1.55 0 0 0 1.71.31h.07a1.55 1.55 0 0 0 .94-1.42V3.9a1.9 1.9 0 0 1 3.8 0v.09a1.55 1.55 0 0 0 .94 1.42 1.55 1.55 0 0 0 1.71-.31l.06-.06a1.9 1.9 0 1 1 2.69 2.69l-.06.06a1.55 1.55 0 0 0-.31 1.71v.07a1.55 1.55 0 0 0 1.42.94h.17a1.9 1.9 0 0 1 0 3.8h-.09a1.55 1.55 0 0 0-1.42.94z"/>
+      </svg>
+    </button>
+
+    <button class="refresco" id="refrescar" type="button" data-ref="listo" title="" aria-label="Actualizar los datos ahora">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
+        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
+      </svg>
+      <span class="ref-aviso" id="refAviso" data-on="0" aria-live="polite"></span>
+    </button>
+    <span class="estado" id="estadoBtn" data-estado="offline" role="status" aria-live="polite">OFFLINE</span>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Secciones">
+  <div class="tabs-in" role="tablist">
+    <button class="tab" role="tab" id="tab-mercado"  aria-selected="true"  aria-controls="mercado">Mercado</button>
+    <button class="tab" role="tab" id="tab-plan"     aria-selected="false" aria-controls="plan">Apuestas</button>
+    <button class="tab" role="tab" id="tab-registro" aria-selected="false" aria-controls="registro">Resultados</button>
+    <button class="tab" role="tab" id="tab-calc"     aria-selected="false" aria-controls="calc">Calculadora</button>
+  </div>
+</nav>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <clipPath id="camCuerpo"><path d="M8.8 3.2 12 4.8 15.2 3.2 16.6 4.6 16.6 20 7.4 20 7.4 4.6Z"/></clipPath>
+</defs></svg>
+
+<div class="wrap">
+  <div class="banner" id="demoBanner">
+    <b>Datos de ejemplo</b>
+    <span>El mercado que ves son cuotas inventadas para que veas cómo funciona el panel. En cuanto se carguen las de Bet365 en la base, sustituirán a estas.</span>
+    <span class="sp"><button class="btn sm" id="clearDemo">Vaciar y empezar en limpio</button></span>
+  </div>
+
+  <!-- ============ MERCADO ============ -->
+  <section class="sect on" id="mercado" role="tabpanel" aria-labelledby="tab-mercado">
+    <div class="grid" style="grid-template-columns:1fr">
+      <div class="panel">
+        <div class="sportbar" id="sportBar" role="group" aria-label="Deporte"></div>
+        <div class="ligabar" id="ligaBar" role="group" aria-label="Competición"></div>
+
+        <!-- Filtro por días. De fábrica: solo los partidos de HOY. -->
+        <div class="fechabar" id="fechaBar">
+          <button class="calbtn" id="calBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="calPop" title="">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.2" y="4.8" width="17.6" height="16" rx="2.4"/><path d="M3.2 9.6h17.6M8.2 2.8v4M15.8 2.8v4"/>
+            </svg>
+            <span id="calEtiq">Hoy</span>
+            <svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg>
+          </button>
+          <span class="fecha-n" id="fechaN"></span>
+
+          <div class="calpop" id="calPop" hidden role="dialog" aria-label="Filtrar los partidos por días">
+            <div class="cal-hd">
+              <button class="cal-nav" type="button" data-mes="-1" aria-label="Mes anterior">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg>
+              </button>
+              <b id="calMes"></b>
+              <button class="cal-nav" type="button" data-mes="1" aria-label="Mes siguiente">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+              </button>
+            </div>
+            <div class="cal-sem" aria-hidden="true"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+            <div class="cal-grid" id="calGrid"></div>
+            <div class="cal-pie">
+              <button class="chip" type="button" data-rapido="hoy" aria-pressed="true">Hoy</button>
+              <button class="chip" type="button" data-rapido="manana" aria-pressed="false">Mañana</button>
+              <button class="chip" type="button" data-rapido="7" aria-pressed="false">7 días</button>
+              <button class="chip" type="button" data-rapido="todos" aria-pressed="false">Todos los días</button>
+            </div>
+            <p class="cal-nota" id="calNota"></p>
+          </div>
+        </div>
+
+        <div class="head-row" aria-hidden="true">
+          <span>Hora</span><span>Partido</span><span>1 · Local</span><span>X · Empate</span><span>2 · Visitante</span>
+        </div>
+        <div class="ev-list" id="evList"></div>
+      </div>
+
+      <!-- La estadística de la NBA, debajo del mercado. Solo aparece con Baloncesto
+           elegido, porque solo habla de la NBA: enseñarla con el fútbol delante sería
+           ruido. Lo que hay dentro sale de la colección `nba` de la base. -->
+      <div class="panel" id="nbaPanel" hidden>
+        <div class="panel-hd"><h2>NBA &#183; estad&#237;stica de equipo</h2><span class="eyebrow" id="nbaFuente"></span></div>
+        <div id="nbaCuerpo"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ APUESTAS (planificador de la ruta) ============
+       La ruta de 10 € a 1.000 € en 5 apuestas: la aritmética, el riesgo de la cadena
+       entera, las candidatas a primera apuesta salidas de las cuotas de Bet365 que haya
+       en la base, y el seguimiento etapa a etapa.
+
+       Hubo tres rutas (5, 15 y 25 apuestas) hasta el 14-09-2026. Diego dejó solo la de
+       5. El porqué está escrito en el bloque A y en el 6, y no es estético: cada etapa
+       paga el margen una vez.
+
+       Reglas de esta pestaña, para quien la toque después:
+       · Aquí NO se inventan cuotas, partidos, alineaciones ni probabilidades. Lo que se
+         enseña sale de `S.market` (cuotas cargadas, con su hora de copia) o de la
+         aritmética pura. Sin datos cargados, la pestaña dice NO ESTIMABLE y ya está.
+       · Con los datos de ejemplo puestos no se propone ninguna candidata: serían cuotas
+         inventadas, y proponerlas sería exactamente el engaño que este panel evita.
+       · Nada de martingalas, recargas ni reinicios: 10 € y se acabó. -->
+  <section class="sect" id="plan" role="tabpanel" aria-labelledby="tab-plan">
+    <div class="grid" style="grid-template-columns:1fr">
+
+      <!-- ---------- parámetros ---------- -->
+      <div class="panel">
+        <div class="panel-hd"><h2>Par&#225;metros</h2><span class="eyebrow">Todo se recalcula al cambiarlos</span></div>
+        <div class="toolbar">
+          <label class="f">Saldo inicial<input class="num" type="number" id="rSaldo" step="0.01" min="0.10" value="10"></label>
+          <label class="f">Objetivo<input class="num" type="number" id="rObjetivo" step="1" min="1" value="1000"></label>
+          <label class="f" title="El sobre-margen (overround) que supones en los mercados que vas a jugar: Σ 1/cuota − 1. Es un SUPUESTO tuyo, no un dato medido.">Margen supuesto %<input class="num" type="number" id="rMargen" step="0.1" min="0" max="40" value="5"></label>
+          <label class="f" title="Importe mínimo por apuesta de tu cuenta. Compruébalo en Bet365: si el saldo cae por debajo, la etapa no se puede jugar.">Apuesta mínima<input class="num" type="number" id="rMin" step="0.01" min="0" value="0.10"></label>
+        </div>
+        <div class="stats" id="planKpis"></div>
+      </div>
+
+      <!-- ---------- la primera apuesta ----------
+           Hasta tres candidatas, de las cuotas de Bet365 CARGADAS en la base, de
+           partidos que empiezan en las próximas 72 h y no han comenzado. Con los datos
+           de ejemplo puestos no sale ninguna: inventarlas es justo lo que este panel
+           no hace. Cada tarjeta lleva ya su veredicto y qué la invalida. -->
+      <div class="panel">
+        <div class="panel-hd"><h2>La primera apuesta</h2><span class="eyebrow" id="cEstado"></span></div>
+        <div id="candidatas"></div>
+      </div>
+
+      <!-- ---------- seguimiento ---------- -->
+      <div class="panel">
+        <div class="panel-hd"><h2>Seguimiento</h2><span class="eyebrow" id="seguiTit"></span></div>
+        <div id="segui"></div>
+      </div>
+
+      <!-- El aviso de riesgo baja de dos párrafos a una línea, y en números en vez de
+           en prosa: el saldo esperado por debajo del puesto ES el valor esperado
+           negativo. Se queda porque quitarlo del todo dejaría una tabla de 10 € →
+           1.000 € sin decir lo que cuesta intentarlo. -->
+      <p class="aviso-ruta" id="avisoPie"></p>
+
+    </div>
+  </section>
+
+  <!-- ============ RESULTADOS ============
+       Era la pestaña «Apuestas» hasta el 13-09-2026: se renombró a Resultados cuando
+       entró el planificador de rutas, que es el que se quedó con el nombre Apuestas.
+       Los ids (#tab-registro, #registro) NO se tocaron: los usan procesarFicheros()
+       y el resto del script.
+
+       Única entrada del registro: una imagen del boleto de Bet365. Se arrastra, se
+       sube o se pega; Claude la lee; se enseña lo leído para confirmarlo y se guarda.
+       Aquí NO hay formulario manual, ni filtros, ni tabla, ni CSV: se quitaron el
+       13-09-2026 a petición de Diego. Y la imagen no se archiva en ninguna parte —
+       viaja para leerla y se descarta. -->
+  <section class="sect" id="registro" role="tabpanel" aria-labelledby="tab-registro">
+    <div class="panel">
+      <div class="panel-hd"><h2>Subir una apuesta</h2><span class="eyebrow" id="saveState" aria-live="polite"></span></div>
+
+      <div class="drop" id="drop" data-on="0" data-off="0" role="button" tabindex="0"
+           aria-label="Arrastra, pega o elige el recorte de la apuesta">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2.8" y="4.2" width="18.4" height="15.6" rx="2.6"/>
+          <circle cx="8.4" cy="9.6" r="1.7"/>
+          <path d="M3.2 16.9 8.1 12.6l3.3 2.9 3.4-2.8 5 4.4"/>
+        </svg>
+        <h3>Arrastra aqu&#237; el recorte de Bet365</h3>
+        <p id="dropSub">Tambi&#233;n vale pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd> desde cualquier parte del panel, o soltarlo en cualquier sitio de esta p&#225;gina. Una imagen, una apuesta.</p>
+        <div class="botones">
+          <button class="btn primary" type="button" id="elegir">Elegir imagen</button>
+          <button class="btn" type="button" id="permitir" hidden>Permitir la lectura</button>
+        </div>
+        <p class="diag" id="dropDiag" hidden></p>
+        <input type="file" id="ficha" accept="image/png,image/jpeg,image/webp" multiple hidden>
+      </div>
+
+      <div class="lects" id="lects"></div>
+    </div>
+  </section>
+
+  <!-- ============ CALCULADORA ============
+       La última pestaña del menú (14-09-2026). Una sola pregunta y una sola entrada:
+       con X € de partida, ¿qué saldo sale en cada una de las cinco etapas del paso
+       agresivo?
+
+       Lo que aquí NO se puede tocar, y es a propósito — Diego lo pidió así:
+       · la cuota, PREFIJADA en la del paso agresivo (la misma que calcula la pestaña
+         Apuestas y enseña la ventana ⓘ);
+       · el número de etapas, que son cinco;
+       · el objetivo, que aquí no existe: manda la cuota, así que el resultado se mueve
+         con el dinero. 25 € no terminan en 1.000 €, terminan en 2.500,44 €.
+       Si alguna vez aparece un segundo campo en esta pestaña, deja de ser esta pestaña. -->
+  <section class="sect" id="calc" role="tabpanel" aria-labelledby="tab-calc">
+    <div class="grid" style="grid-template-columns:1fr">
+
+      <div class="panel">
+        <div class="panel-hd"><h2>Paso agresivo de 5</h2><span class="eyebrow" id="calcEti"></span></div>
+        <div class="toolbar">
+          <label class="f" style="min-width:190px"
+                 title="Lo único que se escribe en esta pestaña. La cuota, las cinco etapas y el redondeo al céntimo están fijados.">Cantidad inicial (€)
+            <input class="num" type="number" id="cImporte" step="0.01" min="0.01" inputmode="decimal" value="10"></label>
+          <span class="note" id="calcDicho" style="align-self:center"></span>
+        </div>
+        <div class="stats" id="calcKpis"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Etapa</th><th class="n">Importe apostado</th><th class="n">Saldo si gana</th></tr></thead>
+            <tbody id="calcTb"></tbody>
+          </table>
+        </div>
+        <div class="pd" id="calcNota"></div>
+      </div>
+
+      <!-- Mismo aviso de una línea que el pie de la pestaña Apuestas, y por lo mismo:
+           sin él, esto es una tabla de 10 € → 1.000 € que no dice lo que cuesta. -->
+      <p class="aviso-ruta" id="calcRiesgo" style="margin-top:0"></p>
+
+    </div>
+  </section>
+
+</div>
+<!-- ====== VENTANA DE APIS ======
+     Dos niveles: una tarjeta por sitio y, al pulsarla, sus llamadas con la
+     dirección exacta. Se escriben enteras a propósito: es la única manera de que
+     lo que dice esta ventana se pueda comprobar. Y deja dicho lo que NO hay, que
+     es lo que más veces se ha malentendido: Bet365 no tiene API y el panel no
+     sale a internet por su cuenta. -->
+<div class="modal" id="apisModal" hidden role="dialog" aria-modal="true" aria-labelledby="apisTit">
+  <div class="modal-card">
+    <div class="modal-hd">
+      <div>
+        <h2 id="apisTit">APIs y fuentes de datos</h2>
+        <p>Un sitio por tarjeta. Púlsala y verás sus llamadas con la dirección exacta. Bet365 está aquí por lo que <b>no</b> tiene: desde el panel no se le llama en ningún momento.</p>
+      </div>
+      <button class="modal-x" id="apisX" type="button" aria-label="Cerrar">&#10005;</button>
+    </div>
+
+    <div class="modal-body" id="apisBody">
+
+      <!-- ---------- índice ---------- -->
+      <div id="apisIndex">
+        <div class="prov-grid">
+        <button class="prov" type="button" data-prov="servidor" style="--c:var(--s1)">
+          <span class="prov-top"><span class="prov-mono" aria-hidden="true">S</span><b>Servidor local</b></span>
+          <p><code>servidor.mjs</code>: la base de datos del panel y la lectura de los recortes con Claude.</p>
+          <span class="pie"><span class="pill pill mute" id="provDb">comprobando</span><span class="meta"> &#183; 2 llamadas</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></span>
+        </button>
+        <button class="prov" type="button" data-prov="navegador" style="--c:var(--accent)">
+          <span class="prov-top"><span class="prov-mono" aria-hidden="true">N</span><b>Este navegador</b></span>
+          <p>La copia local de todo, la que ves nada más abrir y mientras está OFFLINE.</p>
+          <span class="pie"><span class="pill pill mute">siempre</span><span class="meta"> &#183; 1 almacén</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></span>
+        </button>
+        <button class="prov" type="button" data-prov="google" style="--c:var(--s3)">
+          <span class="prov-top"><span class="prov-mono" aria-hidden="true">G</span><b>Google</b></span>
+          <p>Solo las tipografías. Es la única dirección externa que pide la página.</p>
+          <span class="pie"><span class="pill pill mute">tipografías</span><span class="meta"> &#183; 1 llamada</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></span>
+        </button>
+        <button class="prov" type="button" data-prov="flashscore" style="--c:var(--s2)">
+          <span class="prov-top"><span class="prov-mono" aria-hidden="true">FS</span><b>Flashscore</b></span>
+          <p>De aquí sacaba las cuotas de Bet365 el panel original. Este paquete no trae ese cargador.</p>
+          <span class="pie"><span class="pill pill mute">no incluida</span><span class="meta"> &#183; 3 llamadas</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></span>
+        </button>
+        <button class="prov" type="button" data-prov="nba" style="--c:var(--neg)">
+          <span class="prov-top"><span class="prov-mono" style="font-size:11px" aria-hidden="true">NBA</span><b>NBA</b></span>
+          <p>La estad&#237;stica oficial de la liga, en stats.nba.com. Datos de equipo y de jugador; cuotas no.</p>
+          <span class="pie"><span class="pill pill mute" id="provNba">sin datos</span><span class="meta"> &#183; 6 llamadas</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></span>
+        </button>
+        <button class="prov" type="button" data-prov="bet365" style="--c:var(--warn)">
+          <span class="prov-top"><span class="prov-mono" aria-hidden="true">B</span><b>Bet365</b></span>
+          <p>La casa. No publica ninguna API: sus cuotas entran en la base con el cargador.</p>
+          <span class="pie"><span class="pill pill warn">sin API</span><span class="meta"> &#183; 0 llamadas</span><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></span>
+        </button>
+        </div>
+
+        <span class="eyebrow lim-t">Lo que conviene saber</span>
+        <ul class="lim">
+          <li>La p&#225;gina <b>no sale a internet a por datos</b>: solo pide las tipograf&#237;as y habla con <code>servidor.mjs</code>. Las cuotas entran en la base escritas por <code>cargar-cuotas.mjs</code>.</li>
+          <li>Nada trae cuotas solo. Cada carga es una ejecuci&#243;n de <code>cargar-cuotas.mjs</code> (o una escritura en <code>/api/db</code>), y el panel la pinta al instante.</li>
+          <li><b>Cuotas y estad&#237;stica son dos cosas distintas y vienen de sitios distintos.</b> Las cuotas de Bet365 entran por Flashscore; los datos de la NBA, por stats.nba.com. La NBA no cotiza nada y Flashscore no publica <i>ratings</i>.</li>
+        </ul>
+      </div>
+
+      <!-- ---------- Servidor local ----------
+           En claude.ai esta tarjeta era «Claude»: la plataforma le daba al panel la base y
+           la lectura de imágenes. Fuera de allí las da servidor.mjs, y el panel ni se entera:
+           js/claude-local.js le presenta la misma window.claude.use() de siempre. -->
+      <div class="api-det" data-prov="servidor" hidden style="--c:var(--s1)">
+        <div class="det-hd">
+          <button class="btn sm" type="button" data-volver="1">&#8592; Todas las fuentes</button>
+          <h3>Servidor local</h3><span class="pill mute" id="apiClaude">comprobando</span>
+        </div>
+        <p class="det-sub">En claude.ai la plataforma le prestaba al panel dos cosas: una base de datos propia y la lectura de las im&#225;genes que subes. Aqu&#237; las presta <code>servidor.mjs</code>, a trav&#233;s de <code>js/claude-local.js</code>. Ninguna de las dos sale a buscar cuotas a ninguna parte.</p>
+        <div class="api">
+          <div class="api-t"><b>Base del panel</b><span class="pill pill mute" id="apiDb">comprobando</span></div>
+          <div class="ep">window.claude.use('db')
+GET &#183; PUT &#183; DELETE  /api/db/&lt;colecci&#243;n&gt;/&lt;id&gt;
+GET                 /api/eventos</div>
+          <p class="que">Guarda en <code>datos/base.json</code> y sincroniza entre todas las pesta&#241;as abiertas contra el servidor: colecciones <code>mercado</code>, <code>apuestas</code>, <code>rutas</code> y <code>nba</code>, ajustes en <code>config/panel</code>. Un canal de eventos pinta aqu&#237; cualquier escritura al instante, y el bot&#243;n de refresco vuelve a leerlas enteras cuando lo pulsas. Es lo que decide si el badge dice ONLINE u OFFLINE, y es por donde entran las cuotas al panel.</p>
+        </div>
+        <div class="api">
+          <div class="api-t"><b>Lectura del recorte</b><span class="pill pill mute" id="apiSample">comprobando</span></div>
+          <div class="ep">window.claude.use('sample')
+POST /api/leer  &#8594;  https://api.anthropic.com/v1/messages</div>
+          <p class="que">Lo que lee la imagen del boleto: el servidor se la manda a Claude con <b>tu</b> clave de Anthropic (<code>ANTHROPIC_API_KEY</code>) y devuelve las patas, el mercado de cada selecci&#243;n, cu&#225;l acert&#243; y cu&#225;l fall&#243;, el importe y el retorno. Sin clave, la pesta&#241;a Resultados lo dice y no deja subir nada.</p>
+        </div>
+        <span class="eyebrow lim-t">Lo que conviene saber</span>
+        <ul class="lim">
+          <li>La base es <b>del panel</b>, no de Bet365: dentro solo hay lo que escribas t&#250;.</li>
+          <li>El recorte que subes <b>no se archiva</b>: viaja a la API de Anthropic para leerlo y se descarta. En la base queda la apuesta en n&#250;meros, no la imagen. Cada lectura se cobra en tu cuenta de Anthropic.</li>
+          <li>Sin servidor (abriendo <code>index.html</code> con doble clic), el panel sigue funcionando con la copia de este navegador y el badge se queda en OFFLINE.</li>
+          <li>El servidor <b>no pide contrase&#241;a</b>. De f&#225;brica solo escucha en este ordenador; no lo abras a una red en la que no conf&#237;es.</li>
+        </ul>
+      </div>
+
+      <!-- ---------- este navegador ---------- -->
+      <div class="api-det" data-prov="navegador" hidden style="--c:var(--accent)">
+        <div class="det-hd">
+          <button class="btn sm" type="button" data-volver="1">&#8592; Todas las fuentes</button>
+          <h3>Este navegador</h3><span class="pill mute">siempre</span>
+        </div>
+        <p class="det-sub">No es una API, pero s&#237; una fuente de datos: es de donde sale lo que ves en el primer segundo, antes de que conteste nada.</p>
+        <div class="api">
+          <div class="api-t"><b>Guardado local</b><span class="pill pill mute">siempre</span></div>
+          <div class="ep">localStorage["cuotajusta.v1"]</div>
+          <p class="que">Copia de ajustes, apuestas y mercado. Es lo que ves cuando el panel arranca y mientras est&#225; OFFLINE.</p>
+        </div>
+        <span class="eyebrow lim-t">Lo que conviene saber</span>
+        <ul class="lim">
+          <li>No sale de este navegador ni llega a otros: para eso est&#225; la base del servidor.</li>
+          <li>Si borras los datos del navegador, se borra esta copia. La del servidor no.</li>
+        </ul>
+      </div>
+
+      <!-- ---------- Google ---------- -->
+      <div class="api-det" data-prov="google" hidden style="--c:var(--s3)">
+        <div class="det-hd">
+          <button class="btn sm" type="button" data-volver="1">&#8592; Todas las fuentes</button>
+          <h3>Google</h3><span class="pill mute">tipograf&#237;as</span>
+        </div>
+        <p class="det-sub">Nada de datos: solo las letras con las que est&#225; escrito el panel.</p>
+        <div class="api">
+          <div class="api-t"><b>Google Fonts</b><span class="pill pill mute">tipograf&#237;as</span></div>
+          <div class="ep">https://fonts.googleapis.com/css2
+https://fonts.gstatic.com</div>
+          <p class="que">Geist para el texto, Instrument Sans para los t&#237;tulos y Geist Mono para las cuotas y las etiquetas en may&#250;sculas, que as&#237; quedan alineadas en columna. Es la misma familia tipogr&#225;fica que usa trendtrack.io.</p>
+        </div>
+        <span class="eyebrow lim-t">Lo que conviene saber</span>
+        <ul class="lim">
+          <li>Es la <b>&#250;nica</b> direcci&#243;n externa que pide la p&#225;gina. Todo lo dem&#225;s va a <code>servidor.mjs</code>.</li>
+          <li>Si no cargan, el panel se ve con la tipograf&#237;a del sistema y funciona igual.</li>
+        </ul>
+      </div>
+
+      <!-- ---------- Flashscore ---------- -->
+      <div class="api-det" data-prov="flashscore" hidden style="--c:var(--s2)">
+        <div class="det-hd">
+          <button class="btn sm" type="button" data-volver="1">&#8592; Todas las fuentes</button>
+          <h3>Flashscore</h3><span class="pill mute">no incluida</span>
+        </div>
+        <p class="det-sub">Flashscore publica las cuotas de Bet365 por una API abierta de LiveSport, sin clave y sin firma, y <b>sin tocar la web de Bet365</b> en ning&#250;n momento. En el panel original las hac&#237;a Claude y escrib&#237;a el resultado en la base. <b>Este paquete no las hace</b>: ni la p&#225;gina ni el servidor llaman a Flashscore.</p>
+        <div class="api">
+          <div class="api-t"><b>Partidos del d&#237;a</b><span class="pill pill mute">sin usar</span></div>
+          <div class="ep">GET https://local-global.flashscore.ninja/13/x/feed/f_1_&lt;d&#237;a&gt;_1_es_1</div>
+          <div class="par"><span>x-fsign: SW9D1eZo<em>cabecera</em></span><span>d&#237;a 0&#8211;6<em>hoy y seis m&#225;s</em></span><span>sin clave</span></div>
+          <p class="que">La lista de encuentros con su id, la hora de comienzo y el marcador. <b>No trae cuotas</b>: sirve para saber qu&#233; partidos hay y pedir luego el precio de cada uno.</p>
+        </div>
+        <div class="api">
+          <div class="api-t"><b>Cuotas</b><span class="pill pill mute">sin usar</span></div>
+          <div class="ep">GET https://global.ds.lsapp.eu/odds/pq_graphql</div>
+          <div class="par"><span>_hash=ope2<em>una casa, previa</em></span><span>_hash=oce<em>comparativa, 11 casas</em></span><span>_hash=ole2<em>en vivo</em></span><span>_hash=dloou<em>solo cambios</em></span><span>bookmakerId=16<em>Bet365</em></span><span>projectId=13<em>flashscore.es</em></span></div>
+          <p class="que">Una petici&#243;n por partido, sin clave, sin cookie y sin firma. Se usa <code>ope2</code> porque devuelve el 1, la X y el 2 con nombre propio; <code>value</code> es la cuota viva y <code>opening</code> la de apertura.</p>
+        </div>
+        <div class="api">
+          <div class="api-t"><b>Push en tiempo real</b><span class="pill pill mute">sin usar</span></div>
+          <div class="ep off">wss://fsdatacentre.com:443 &#183; ns /fs/fs3_ &#183; /fsds/changes</div>
+          <p class="que">El canal por el que la web de Flashscore se actualiza sola sin recargar. Es lo &#250;nico que dar&#237;a el minuto exacto en los partidos en juego. Hoy no se usa.</p>
+        </div>
+        <span class="eyebrow lim-t">Lo que conviene saber</span>
+        <ul class="lim">
+          <li>Este paquete no trae ning&#250;n cargador para esta fuente. Las cuotas entran en la base con <code>cargar-cuotas.mjs</code>, vengan de donde vengan (el formato est&#225; en el LEEME).</li>
+          <li>La cach&#233; del CDN devuelve hasta unos 2 minutos de antig&#252;edad. El minuto exacto solo lo dar&#237;a el WebSocket de arriba.</li>
+          <li><code>bookmakerId 16</code> devuelve lo mismo en Espa&#241;a y en Reino Unido: es el Bet365 <b>internacional</b>. Falta contrastar diez partidos contra bet365.es antes de fiarse de &#233;l para medir valor.</li>
+          <li>Es dato de un tercero y sus condiciones no autorizan la extracci&#243;n sistem&#225;tica. No hay contrato ni permiso; pueden bloquear la IP.</li>
+        </ul>
+      </div>
+
+      <!-- ---------- NBA ---------- -->
+      <div class="api-det" data-prov="nba" hidden style="--c:var(--neg)">
+        <div class="det-hd">
+          <button class="btn sm" type="button" data-volver="1">&#8592; Todas las fuentes</button>
+          <h3>NBA</h3><span class="pill mute" id="apiNbaEstado">sin datos</span>
+        </div>
+        <p class="det-sub">La estad&#237;stica oficial de la liga, la misma que sirve nba.com. Sin clave y sin cuenta, pero
+          <b>exige cabeceras de navegador</b> y no contesta desde un centro de datos. En esta versi&#243;n no las hace nadie: la colecci&#243;n <code>nba</code> se rellena con <code>cargar-cuotas.mjs</code>.
+          Desde el 14-09-2026 es la <b>&#250;nica</b> competici&#243;n de baloncesto del panel.</p>
+
+        <div class="api">
+          <div class="api-t"><b>Cabeceras obligatorias</b><span class="pill pill warn">en todas</span></div>
+          <div class="ep">Referer: https://www.nba.com/
+Origin: https://www.nba.com
+User-Agent: Mozilla/5.0 (&#8230; un navegador de verdad &#8230;)
+x-nba-stats-origin: stats
+x-nba-stats-token: true
+Accept-Language: en-US,en;q=0.9</div>
+          <p class="que">Sin el <code>Referer</code> de nba.com devuelve <b>403</b>. Sin <code>User-Agent</code> de navegador la
+            petici&#243;n se queda colgada hasta agotar el tiempo de espera &#8212; no da error, simplemente no contesta.</p>
+        </div>
+
+        <div class="api">
+          <div class="api-t"><b>Partidos del d&#237;a</b><span class="pill pill mute">calendario</span></div>
+          <div class="ep">GET https://stats.nba.com/stats/scoreboardv2</div>
+          <div class="par"><span>LeagueID=00<em>NBA</em></span><span>GameDate=MM/DD/AAAA<em>hora del Este</em></span><span>DayOffset=0</span></div>
+          <p class="que">Los partidos de una fecha con su <code>GAME_ID</code>, la hora, el estado y el marcador por cuartos
+            (<code>GameHeader</code> y <code>LineScore</code>). De aqu&#237; salen los encuentros a los que luego se les pide la cuota
+            a Flashscore.</p>
+        </div>
+
+        <div class="api">
+          <div class="api-t"><b>Clasificaci&#243;n</b><span class="pill pill mute">V&#8211;D</span></div>
+          <div class="ep">GET https://stats.nba.com/stats/leaguestandingsv3</div>
+          <div class="par"><span>LeagueID=00</span><span>Season=2026-27</span><span>SeasonType=Regular Season</span></div>
+          <p class="que">Victorias y derrotas totales, en casa y fuera, racha y &#250;ltimos diez. Es el contexto m&#237;nimo de
+            cualquier partido, y lo &#250;nico de esta lista que se entiende sin explicaci&#243;n.</p>
+        </div>
+
+        <div class="api">
+          <div class="api-t"><b>Estad&#237;stica avanzada de equipo</b><span class="pill pill pos">la que usa el panel</span></div>
+          <div class="ep">GET https://stats.nba.com/stats/leaguedashteamstats
+    ?LeagueID=00&amp;Season=2026-27&amp;SeasonType=Regular Season
+    &amp;MeasureType=Advanced&amp;PerMode=PerGame
+    &amp;Month=0&amp;OpponentTeamID=0&amp;Period=0&amp;LastNGames=0
+    &amp;PaceAdjust=N&amp;PlusMinus=N&amp;Rank=N</div>
+          <div class="par"><span>OFF_RATING</span><span>DEF_RATING</span><span>NET_RATING</span><span>PACE</span><span>EFG_PCT</span><span>TM_TOV_PCT</span></div>
+          <p class="que">Es la que alimenta la tabla <b>NBA &#183; estad&#237;stica de equipo</b> del Mercado y el NetRtg que sale en
+            cada fila de partido. Un documento por equipo en la colecci&#243;n <code>nba</code>, con el id de equipo de
+            stats.nba.com como id de documento, m&#225;s <code>_meta</code> con la temporada y la hora de lectura.</p>
+        </div>
+
+        <div class="api">
+          <div class="api-t"><b>Estad&#237;stica de jugador</b><span class="pill pill mute">sin usar</span></div>
+          <div class="ep off">GET https://stats.nba.com/stats/leaguedashplayerstats
+    ?&#8230;&amp;MeasureType=Base&amp;PerMode=PerGame</div>
+          <div class="par"><span>MIN</span><span>PTS</span><span>REB</span><span>AST</span><span>FG3M</span></div>
+          <p class="que">Minutos, puntos, rebotes, asistencias y triples por partido. Es lo que har&#237;a falta para los mercados de
+            jugador, que en baloncesto son la mitad del cat&#225;logo de Bet365. Todav&#237;a no se carga.</p>
+        </div>
+
+        <div class="api">
+          <div class="api-t"><b>Partido a partido de un equipo</b><span class="pill pill mute">sin usar</span></div>
+          <div class="ep off">GET https://stats.nba.com/stats/teamgamelog
+    ?TeamID=1610612747&amp;Season=2026-27&amp;SeasonType=Regular Season</div>
+          <p class="que">La serie completa de un equipo, no la media. Es lo que permite separar local de visitante, mirar
+            forma reciente sin quedarse en cinco partidos y calcular la variabilidad, que es lo que de verdad mueve las
+            l&#237;neas de totales.</p>
+        </div>
+
+        <div class="api">
+          <div class="api-t"><b>Boxscore avanzado de un partido</b><span class="pill pill mute">sin usar</span></div>
+          <div class="ep off">GET https://stats.nba.com/stats/boxscoreadvancedv3
+    ?GameID=0022600001&amp;StartPeriod=1&amp;EndPeriod=10&amp;StartRange=0&amp;EndRange=0&amp;RangeType=0</div>
+          <p class="que">El detalle de un encuentro ya jugado, por equipo y por jugador. Para revisar despu&#233;s, no para
+            apostar antes.</p>
+        </div>
+
+        <span class="eyebrow lim-t">Lo que conviene saber</span>
+        <ul class="lim">
+          <li><b>No publica ni una cuota.</b> Es estad&#237;stica de la liga. Las de Bet365 siguen entrando por Flashscore, y
+            cruzarlas es cosa del panel, no de la NBA.</li>
+          <li><b>No contesta desde un centro de datos.</b> Probado el 14-09-2026 desde un servidor en la nube: la petici&#243;n
+            se agota sin respuesta. Hay que llamarla desde una IP dom&#233;stica y con las cabeceras de arriba.</li>
+          <li>La p&#225;gina <b>no</b> la llama: los datos entran escritos en la base, como todo lo dem&#225;s.</li>
+          <li>La respuesta viene <b>por columnas</b>: <code>resultSets[].headers</code> con los nombres y <code>rowSet[]</code>
+            con las filas. Hay que casarlas por posici&#243;n; no son objetos.</li>
+          <li>La temporada <b>2026-27 empieza el 20 de octubre de 2026</b>. Hasta que se juegue, <code>leaguedashteamstats</code>
+            de 2026-27 vuelve vac&#237;o y lo &#250;nico con datos es la 2025-26, que es rendimiento del a&#241;o pasado con otras
+            plantillas.</li>
+          <li>Las fechas y las horas van en <b>horario del Este de EE.&#160;UU.</b>, y un partido de la madrugada espa&#241;ola
+            pertenece al d&#237;a anterior en esta API.</li>
+          <li>No hay contrato ni API p&#250;blica documentada: no est&#225; prometida y pueden cambiarla o cerrarla sin avisar.</li>
+        </ul>
+      </div>
+
+      <!-- ---------- Bet365 ---------- -->
+      <div class="api-det" data-prov="bet365" hidden style="--c:var(--warn)">
+        <div class="det-hd">
+          <button class="btn sm" type="button" data-volver="1">&#8592; Todas las fuentes</button>
+          <h3>Bet365</h3><span class="pill warn">sin API</span>
+        </div>
+        <p class="det-sub">Est&#225; en esta lista para dejarlo dicho: el panel <b>no llama a Bet365</b>. Ni el bot&#243;n de refresco, ni el badge ONLINE, ni nada. Sus cuotas entran por la v&#237;a de abajo.</p>
+        <div class="api">
+          <div class="api-t"><b>No publica ninguna</b><span class="pill pill warn">sin API</span></div>
+          <div class="ep off">&#8212;</div>
+          <p class="que">El programa de afiliados da enlaces de marketing, no un feed de cuotas. La &#250;nica v&#237;a oficial es un contrato de datos de empresa, que ronda los 10.000&#160;$/mes. Todo producto que se anuncie como &#171;API de Bet365&#187; es un tercero que lee sus cuotas p&#250;blicas y las revende.</p>
+        </div>
+        <span class="eyebrow lim-t">Lo que conviene saber</span>
+        <ul class="lim">
+          <li>En el panel original entraban <b>por la l&#237;nea de Flashscore</b>, que no toca Bet365 en ning&#250;n momento. En este paquete entran en la base con <code>cargar-cuotas.mjs</code>.</li>
+          <li>Leer bet365.es con un navegador dirigido por programa queda descartado: sus condiciones proh&#237;ben el acceso automatizado y la p&#225;gina declara protecci&#243;n reCAPTCHA.</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ====== VENTANA DE INFO ======
+     Una sola tabla: los cinco saldos de la ruta agresiva, etapa a etapa. Ni un número
+     escrito a mano — se calculan al abrirla con los parámetros de la pestaña Apuestas,
+     así que si cambia el saldo inicial o el objetivo, la tabla cambia con ellos. -->
+<div class="modal" id="infoModal" hidden role="dialog" aria-modal="true" aria-labelledby="infoTit">
+  <div class="modal-card" style="width:min(520px,100%)">
+    <div class="modal-hd">
+      <div>
+        <h2 id="infoTit">La ruta agresiva, etapa a etapa</h2>
+        <p id="infoSub"></p>
+      </div>
+      <button class="modal-x" id="infoX" type="button" aria-label="Cerrar">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="tbl-wrap" style="padding-top:16px">
+        <table>
+          <thead><tr><th>Etapa</th><th>Saldo</th></tr></thead>
+          <tbody id="infoTb"></tbody>
+        </table>
+      </div>
+      <p class="note" id="infoNota" style="margin:12px 0 0"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ====== LA LÓGICA ======
+     Scripts clásicos, no módulos: así index.html también se abre con doble clic
+     (los módulos no cargan desde file://). Comparten el ámbito global y el ORDEN
+     IMPORTA: cada archivo solo usa al cargarse lo que definen los anteriores, y
+     13-arranque.js, que pinta y conecta con la base, va el último.
+     claude-local.js va primero: le da al panel la misma window.claude.use() que
+     tenía en claude.ai, hablando con servidor.mjs. -->
+<script src="js/claude-local.js"></script>
+<script src="js/01-nucleo.js"></script>
+<script src="js/02-motor.js"></script>
+<script src="js/03-base.js"></script>
+<script src="js/04-filtros.js"></script>
+<script src="js/05-partido.js"></script>
+<script src="js/06-camisetas.js"></script>
+<script src="js/07-mercado.js"></script>
+<script src="js/08-nba.js"></script>
+<script src="js/09-interfaz.js"></script>
+<script src="js/10-resultados.js"></script>
+<script src="js/11-apuestas.js"></script>
+<script src="js/12-calculadora.js"></script>
+<script src="js/13-arranque.js"></script>
+</body>
+</html>

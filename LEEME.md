@@ -1,0 +1,115 @@
+# Cuota Justa
+
+Panel de cuotas de Bet365 con cuatro pestañas:
+
+- **Mercado**: los partidos del día y cuánto se ha movido cada cuota desde la apertura.
+- **Apuestas**: la ruta de 10 € a 1.000 € en 5 apuestas.
+- **Resultados**: lee la captura de un boleto y lo apunta.
+- **Calculadora**: el paso agresivo con la cuota ya fijada.
+
+Es el mismo panel que está publicado en claude.ai, pasado a archivos normales para que funcione en cualquier ordenador.
+
+## Arrancar
+
+Necesitas [Node.js](https://nodejs.org) 18 o superior. No hay que instalar nada más.
+
+```
+node servidor.mjs
+```
+
+Después abre **http://localhost:8787**.
+
+| Si quieres… | Haz esto |
+|---|---|
+| Leer boletos (pestaña Resultados) | Copia `ejemplo.env` con el nombre `.env`, pon tu `ANTHROPIC_API_KEY` y reinicia el servidor. Cada lectura se cobra en tu cuenta de Anthropic. |
+| Usar otro puerto | Pon `PORT=8788` en `.env`. |
+| Verlo sin servidor | Abre `index.html` con doble clic. Funciona en OFFLINE con lo guardado en ese navegador, pero no recibe cuotas ni lee boletos. |
+| Empezar de cero | Para el servidor y borra `datos/base.json`. |
+
+## Cargar cuotas
+
+El panel no sale a buscar cuotas: pinta lo que hay en su base. Mientras no cargues nada, el Mercado enseña **datos de ejemplo** y lo avisa arriba.
+
+Con el servidor arrancado:
+
+```
+node cargar-cuotas.mjs mis-cuotas.json             # carga
+node cargar-cuotas.mjs mis-cuotas.json --simular   # solo comprueba, no escribe
+```
+
+El formato es este (hay una plantilla en `datos/plantilla-cuotas.json`):
+
+```json
+{
+  "mercado": [
+    {
+      "deporte": "Fútbol",
+      "liga": "España - LaLiga",
+      "local": "Real Sociedad",
+      "visitante": "Atlético de Madrid",
+      "comienza": "2026-09-20T21:00",
+      "tipo": "1x2",
+      "casas": [["Bet365", 3.40, 3.60, 2.05]],
+      "apertura": [3.20, 3.70, 2.10]
+    }
+  ]
+}
+```
+
+| Campo | Qué va |
+|---|---|
+| `deporte` | Exactamente `Fútbol`, `Baloncesto` o `League of Legends` para que salga con su botón. Los demás (tenis, etc.) también entran y se ven con «Ver todos». |
+| `liga` | Tiene que contener el nombre de la competición para que funcione su filtro: LaLiga, Premier League, Serie A, Bundesliga, Ligue 1, Primeira Liga, Eredivisie, Champions League, Europa League, Conference League, NBA, LEC, Superliga, LFL o Prime League. |
+| `comienza` | Hora local sin zona (`2026-09-20T21:00`) o con zona (`2026-09-20T19:00:00Z`). No pongas la hora UTC sin la `Z`, porque saldría desplazada. |
+| `tipo` | `1x2`, o `2v` si solo hay dos resultados (tenis, NBA…). En `2v` la cuota del medio va a `0`. |
+| `casas` | `[["Bet365", cuota 1, cuota X, cuota 2]]`, en decimal y con punto. |
+| `apertura` | Opcional. La cuota de apertura, que es la referencia del % de movimiento. Si falta, se compara con la primera lectura cargada. |
+| `id` | Opcional. Si no lo pones, se saca de los equipos y el día. |
+| `actualizado` | Opcional. Cuándo se copiaron las cuotas (si no lo pones, se toma la hora de la carga). Un partido ya empezado no enseña cuotas copiadas antes del comienzo. |
+| `marcador`, `reloj`, `relojT` | Opcionales, para partidos en juego: `[2, 1]`, `"63:10"` y la hora a la que se copiaron. El reloj no avanza solo. |
+
+Si cargas otra vez un partido que ya está (mismo `id`, o mismos equipos el mismo día), no se duplica: la lectura nueva se añade a su `historial`. Con `--reemplazar`, en la base se queda solo lo que venga en el archivo.
+
+La tabla de la NBA (sale al elegir Baloncesto) se carga en el mismo archivo, con `"nba"`: un objeto por equipo con el `id` de stats.nba.com y los campos `equipo`, `g`, `v`, `d`, `ortg`, `drtg`, `netrtg` y `pace`. Añade también `"nbaMeta": {"temporada": "2026-27"}`.
+
+## Qué hay dentro
+
+```
+index.html            la página
+css/panel.css         el aspecto, con tema claro y oscuro
+js/claude-local.js    hace de window.claude (lo que daba claude.ai) hablando con servidor.mjs
+js/01…13-*.js         la lógica, por partes, cargada en ese orden
+servidor.mjs          sirve la página, guarda la base y lee los boletos con Claude
+cargar-cuotas.mjs     mete cuotas en la base
+datos/                la base (base.json, se crea sola) y la plantilla
+original/             el HTML tal como está publicado en claude.ai, en un solo archivo
+```
+
+Todo es JavaScript sin compilar y sin dependencias. Las fórmulas (quitar el margen, EV, Kelly, cuota por etapa) están en `01-nucleo.js`, `02-motor.js` y `11-apuestas.js`, y los comentarios del código explican el porqué de cada decisión.
+
+Si quieres cargar datos desde tu propio programa, estas son las rutas del servidor:
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/estado` | Dice si la lectura de boletos está activa y con qué modelo. |
+| `GET /api/db/<colección>` | Devuelve todos los documentos. |
+| `GET` · `PUT` · `DELETE /api/db/<colección>/<id>` | Lee, sustituye entero o borra un documento. |
+| `POST /api/db/<colección>` | Lote: `{"set": [{"id", "data"}], "borrar": [ids], "reemplazar": false}`. |
+| `GET /api/eventos` | Avisa de los cambios al instante (Server-Sent Events). |
+| `POST /api/leer` | Lee un boleto: `{"prompt", "images": [{"media_type", "data"}]}` → `{"json"}`. |
+
+Las colecciones son `mercado`, `apuestas`, `rutas`, `nba` y `config` (con el documento `panel`).
+
+## Diferencias con la versión de claude.ai
+
+- La base y la lectura de boletos las pone `servidor.mjs`, con tu clave, en lugar de la plataforma. El código del panel es el mismo, porque `claude-local.js` le ofrece la misma `window.claude.use()`.
+- ONLINE significa «conectado a servidor.mjs».
+- La ventana de APIs describe el servidor local, y Flashscore sale como «no incluida»: este paquete no trae ningún cargador de cuotas de terceros.
+- Los avisos que mandaban a claude.ai ahora mandan al servidor.
+- Va vacío: no lleva cuotas ni apuestas.
+
+## Avisos
+
+- Apostar tiene valor esperado negativo, y el propio panel lo calcula en cada ruta. Si necesitas ayuda: [jugarbien.es](https://www.jugarbien.es/).
+- Bet365 no publica ninguna API. Las cuotas que cargues son cosa tuya y de la fuente de la que salgan, así que respeta sus condiciones.
+- El servidor no tiene contraseña. De fábrica solo escucha en tu ordenador; no lo arranques con `HOST=0.0.0.0` en una red en la que no confíes.

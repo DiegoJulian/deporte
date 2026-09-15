@@ -1,0 +1,91 @@
+{
+  "_plantilla": true,
+  "_leeme": "Plantilla del formato de carga. Los partidos y las cuotas son INVENTADOS, así que cargar-cuotas.mjs se niega a escribir este archivo (con --simular sí lo comprueba). Cópialo, pon partidos y cuotas reales, borra la línea _plantilla y cárgalo. Los campos están explicados en el LEEME.",
+  "mercado": [
+    {
+      "id": "equipo-a-equipo-b-2026-10-04",
+      "deporte": "Fútbol",
+      "liga": "España - LaLiga",
+      "local": "Equipo A",
+      "visitante": "Equipo B",
+      "comienza": "2026-10-04T21:00",
+      "tipo": "1x2",
+      "casas": [
+        [
+          "Bet365",
+          2.1,
+          3.4,
+          3.2
+        ]
+      ],
+      "apertura": [
+        2.0,
+        3.5,
+        3.4
+      ],
+      "actualizado": "2026-09-14T10:30:00Z"
+    },
+    {
+      "deporte": "Fútbol",
+      "liga": "Inglaterra - Premier League",
+      "local": "Equipo C",
+      "visitante": "Equipo D",
+      "comienza": "2026-09-13T16:00",
+      "tipo": "1x2",
+      "casas": [
+        [
+          "Bet365",
+          1.53,
+          4.2,
+          6.5
+        ]
+      ],
+      "apertura": [
+        1.95,
+        3.6,
+        3.75
+      ],
+      "actualizado": "2026-09-13T17:08:00+02:00",
+      "marcador": [
+        1,
+        0
+      ],
+      "reloj": "63:10",
+      "relojT": "2026-09-13T17:08:00+02:00"
+    },
+    {
+      "deporte": "Baloncesto",
+      "liga": "NBA",
+      "local": "Equipo E",
+      "visitante": "Equipo F",
+      "comienza": "2026-10-21T01:30",
+      "tipo": "2v",
+      "casas": [
+        [
+          "Bet365",
+          1.8,
+          0,
+          2.05
+        ]
+      ]
+    }
+  ],
+  "nba": [
+    {
+      "id": "1610612747",
+      "equipo": "Los Angeles Lakers",
+      "abbr": "LAL",
+      "g": 0,
+      "v": 0,
+      "d": 0,
+      "ortg": 0,
+      "drtg": 0,
+      "netrtg": 0,
+      "pace": 0
+    }
+  ],
+  "nbaMeta": {
+    "temporada": "2026-27",
+    "actualizado": "2026-09-14T10:30:00Z"
+  }
+}

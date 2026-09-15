@@ -1,0 +1,4 @@
+.env
+datos/base.json
+datos/base.json.tmp
+node_modules/
