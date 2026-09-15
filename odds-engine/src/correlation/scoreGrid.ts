@@ -109,6 +109,23 @@ export function fitGridFromMarkets(targets: readonly FitTarget[], maxGoals = MAX
   const usable = targets.filter((t) => Number.isFinite(t.probability) && t.probability > 0 && t.probability < 1);
   if (usable.length < 3) return null;
 
+  // Defensa en profundidad: contar OBJETIVOS INDEPENDIENTES, no objetivos.
+  // Un 1X2 desmarginado aporta como mucho dos ecuaciones (la tercera sale de
+  // las otras dos); cualquier otra familia y linea, una. Si el llamante manda
+  // las tres salidas de un 1X2 y nada mas, esto son dos ecuaciones para tres
+  // parametros: el ajuste saldria con residuo cero y no significaria nada.
+  // Antes esto se confiaba al deduplicado de `pipeline.ts`, que estaba roto.
+  const perFamily = new Map<string, number>();
+  for (const t of usable) {
+    const fam = t.key.split(':')[0] as string;
+    const line = t.key.includes('@') ? t.key.slice(t.key.indexOf('@')) : '';
+    const k = `${fam}${line}`;
+    perFamily.set(k, (perFamily.get(k) ?? 0) + 1);
+  }
+  let independentEquations = 0;
+  for (const [k, n] of perFamily) independentEquations += Math.min(n, k.startsWith('1X2') ? 2 : 1);
+  if (independentEquations < 3) return null;
+
   const loss = (par: readonly number[]): number => {
     const [l, m, r] = par as [number, number, number];
     if (!(l > 0.03) || !(m > 0.03) || l > 8 || m > 8) return 1e9;

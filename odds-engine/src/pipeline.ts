@@ -170,13 +170,21 @@ export function analyse(input: AnalyseInput, cfg: EngineConfig = DEFAULT_CONFIG)
   for (const [matchId, targets] of fitTargets) {
     // Se quita una salida por mercado para no meter ecuaciones redundantes
     // (en un 1X2 desmarginado, la tercera sale de las otras dos).
-    const seen = new Set<string>();
+    //
+    // OJO CON EL CONTADOR: esto llevaba un Set y `[...seen].filter(...).length`,
+    // que en un Set vale SIEMPRE 0 o 1 y nunca 2. Con eso la condicion del 1X2
+    // (`count < 2`) se cumplia siempre y pasaban las TRES salidas, asi que un
+    // partido con solo 1X2 llegaba al ajuste con 3 objetivos —dos de ellos
+    // independientes— y salia una rejilla de 3 parametros con residuo cero y
+    // nota maxima de ajuste. Es decir: el motor se inventaba la precision que
+    // dice no inventarse nunca. Hace falta un multiconjunto, no un conjunto.
+    const seen = new Map<string, number>();
     const independent = targets.filter((t) => {
       const fam = t.key.split(':')[0] as string;
       const line = t.key.includes('@') ? t.key.slice(t.key.indexOf('@')) : '';
       const k = `${fam}${line}`;
-      const count = [...seen].filter((s) => s === k).length;
-      seen.add(k);
+      const count = seen.get(k) ?? 0;
+      seen.set(k, count + 1);
       return count < (fam === '1X2' ? 2 : 1);
     });
     const fit = fitGridFromMarkets(independent);

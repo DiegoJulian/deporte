@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_CONFIG, withConfig } from '../src/config/index.js';
 import { analyse, buildCombinations, type AnalyseInput } from '../src/pipeline.js';
-import { JORNADA, NOW, syntheticLeague } from './helpers.js';
+import { JORNADA, NOW, btts, oneX2, overUnder, syntheticLeague } from './helpers.js';
 
 /**
  * Jornada coherente generada desde distribuciones de marcadores reales, con el
@@ -134,4 +134,41 @@ test('el resultado siempre trae por que, no solo el numero', () => {
     assert.ok(best.rank.explanation.length > 20);
     assert.ok(best.classification.label.length > 0);
   }
+});
+
+/* ------------------------------------------------------------------------
+   Regresion: un partido con SOLO 1X2 no puede producir rejilla de marcadores.
+   Tres salidas de 1X2 desmarginado son DOS ecuaciones independientes, y la
+   rejilla tiene TRES parametros. El deduplicado usaba un Set como contador
+   (siempre 0 o 1), dejaba pasar las tres, y el ajuste salia con residuo cero
+   y nota maxima. El motor se inventaba la precision que dice no inventarse.
+   ------------------------------------------------------------------------ */
+test('un partido con solo 1X2 NO ajusta rejilla: dos ecuaciones no bastan para tres parametros', () => {
+  const r = analyse({
+    matches: [{ matchId: 'm1', league: 'L', home: 'A', away: 'B', startsAt: NOW + 7_200_000 }],
+    markets: [oneX2('m1|1X2', 'm1', 'Bet365', 2.10, 3.40, 3.60)],
+    bookmaker: 'Bet365', now: NOW,
+  }, DEFAULT_CONFIG);
+
+  assert.equal(r.grids.size, 0, 'no puede haber rejilla con un solo mercado');
+  assert.equal(r.gridFits.size, 0);
+  assert.ok(r.warnings.some((w) => w.includes('No se pudo ajustar la distribucion de marcadores')));
+});
+
+test('con 1X2 + over/under + ambos marcan si se ajusta la rejilla', () => {
+  const r = analyse({
+    matches: [{ matchId: 'm1', league: 'L', home: 'A', away: 'B', startsAt: NOW + 7_200_000 }],
+    markets: [
+      oneX2('m1|1X2', 'm1', 'Bet365', 2.10, 3.40, 3.60),
+      overUnder('m1|OU', 'm1', 'Bet365', 1.90, 1.90, 2.5),
+      btts('m1|BTTS', 'm1', 'Bet365', 1.80, 2.00),
+    ],
+    bookmaker: 'Bet365', now: NOW,
+  }, DEFAULT_CONFIG);
+
+  assert.equal(r.grids.size, 1, 'tres familias distintas si dan para ajustar');
+  const fit = r.gridFits.get('m1');
+  assert.ok(fit !== undefined);
+  // Y el residuo ya NO es cero por construccion: hay mas ecuaciones que parametros.
+  assert.ok((fit as NonNullable<typeof fit>).targetsUsed >= 4);
 });
