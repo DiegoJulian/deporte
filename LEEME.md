@@ -78,9 +78,11 @@ La tabla de la NBA (sale al elegir Baloncesto) se carga en el mismo archivo, con
 index.html            la página
 css/panel.css         el aspecto, con tema claro y oscuro
 js/claude-local.js    hace de window.claude (lo que daba claude.ai) hablando con servidor.mjs
+js/motor.js           pide los análisis al motor y traduce sus etiquetas
 js/01…13-*.js         la lógica, por partes, cargada en ese orden
-servidor.mjs          sirve la página, guarda la base y lee los boletos con Claude
+servidor.mjs          sirve la página, guarda la base, lee los boletos y corre el motor
 cargar-cuotas.mjs     mete cuotas en la base
+odds-engine/          el motor de probabilidad y combinadas (TypeScript, se compila)
 datos/                la base (base.json, se crea sola) y la plantilla
 original/             el HTML tal como está publicado en claude.ai, en un solo archivo
 ```
@@ -97,8 +99,43 @@ Si quieres cargar datos desde tu propio programa, estas son las rutas del servid
 | `POST /api/db/<colección>` | Lote: `{"set": [{"id", "data"}], "borrar": [ids], "reemplazar": false}`. |
 | `GET /api/eventos` | Avisa de los cambios al instante (Server-Sent Events). |
 | `POST /api/leer` | Lee un boleto: `{"prompt", "images": [{"media_type", "data"}]}` → `{"json"}`. |
+| `POST /api/analisis` | Pasa el mercado por el motor: `{"targetOdds": 2.5120}` → selecciones, combinadas y veredicto. |
 
 Las colecciones son `mercado`, `apuestas`, `rutas`, `nba` y `config` (con el documento `panel`).
+
+## El motor
+
+La pestaña **Apuestas** ya no propone «las tres cuotas más cercanas a la que hace
+falta». Las candidatas las calcula `odds-engine/`, que aplica reglas bastante más
+duras: calidad del dato, de dónde sale cada probabilidad, correlación entre patas,
+confianza, peaje compuesto y ventaja real de Kelly. Y propone **combinadas**, no
+solo apuestas simples, con la probabilidad conjunta calculada en vez de
+multiplicada.
+
+Para encenderlo, una vez:
+
+```
+cd odds-engine && npm install && npm run build
+```
+
+Sin ese paso el panel arranca igual y la pestaña Apuestas se queda con sus cuentas
+de siempre; `GET /api/estado` dice si el motor está (`"motor": true`).
+
+El motor corre en `servidor.mjs`, no en el navegador: ajustar la distribución de
+marcadores cuesta unos 43 ms por partido y en un móvil eso son segundos de
+pantalla congelada. La respuesta se cachea por contenido de la base.
+
+**Va a decir que no casi siempre.** Con una sola casa cargada, la confianza no
+llega al mínimo de 50 y ninguna candidata pasa los filtros. Eso no es un fallo: es
+que con el precio de Bet365 y nada más no se puede demostrar ventaja. Lo que sí
+hace es decir **por qué**, candidata a candidata, y qué haría falta cargar:
+
+| Si cargas… | Se enciende |
+|---|---|
+| doble oportunidad o empate no válido | detección de precios mal puestos sin necesidad de otra casa |
+| más de / menos de y ambos marcan | el modelo de marcadores: correlación calculada, no acotada |
+| una segunda casa | el eje de valor entero (consenso, dispersión, EV) |
+| la cuota de cierre | el CLV, que es lo que antes dice si una estrategia vale |
 
 ## Diferencias con la versión de claude.ai
 
