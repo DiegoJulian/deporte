@@ -98,12 +98,15 @@ export function fitGridFromMarkets(targets, maxGoals = MAX_GOALS) {
     for (const t of usable) {
         const fam = t.key.split(':')[0];
         const line = t.key.includes('@') ? t.key.slice(t.key.indexOf('@')) : '';
-        const k = `${fam}${line}`;
+        // 1X2, doble oportunidad y empate no valido son la misma distribucion del
+        // resultado escrita de tres formas: comparten cupo y entre las tres no
+        // pasan de dos ecuaciones independientes sobre (lambda, mu, rho).
+        const k = fam === '1X2' || fam === 'DC' || fam === 'DNB' ? 'RESULTADO' : `${fam}${line}`;
         perFamily.set(k, (perFamily.get(k) ?? 0) + 1);
     }
     let independentEquations = 0;
     for (const [k, n] of perFamily)
-        independentEquations += Math.min(n, k.startsWith('1X2') ? 2 : 1);
+        independentEquations += Math.min(n, k === 'RESULTADO' ? 2 : 1);
     if (independentEquations < 3)
         return null;
     const loss = (par) => {

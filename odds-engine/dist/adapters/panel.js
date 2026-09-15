@@ -127,6 +127,57 @@ export function adaptPanelMarkets(docs, opts = {}) {
             normalisationTarget: 1,
             ...(empezado ? { live: true } : {}),
         });
+        // --- Doble oportunidad y empate no valido ---
+        // No son mercados nuevos: son el MISMO resultado escrito de otra forma. Se
+        // cargan por dos motivos, y ninguno es ampliar el modelo de marcadores (no
+        // lo amplian: ver FAMILIAS_DEL_RESULTADO en pipeline.ts). Uno, son patas
+        // apostables por derecho propio. Dos, y mas importante: como la casa los
+        // cotiza por separado, contrastarlos contra el 1X2 delata un precio mal
+        // puesto SIN necesidad de una segunda casa.
+        if (tipo === '1x2') {
+            const extra = (familiaExtra, filas, ids, target) => {
+                if (filas === undefined || filas.length === 0)
+                    return;
+                const porSal = new Map();
+                let completas = 0;
+                for (const fila of filas) {
+                    const nombre = String(fila[0] ?? '').trim();
+                    if (nombre === '')
+                        continue;
+                    const vals = ids.map((_, k) => Number(fila[k + 1]));
+                    if (!vals.every((c) => Number.isFinite(c) && c > 1))
+                        continue;
+                    completas++;
+                    ids.forEach(([oid], k) => {
+                        const lista = porSal.get(oid) ?? [];
+                        lista.push({ bookmaker: nombre, odds: asOdds(vals[k]), observedAt });
+                        porSal.set(oid, lista);
+                    });
+                }
+                if (completas === 0) {
+                    dropped.push({ id: `${id}|${familiaExtra}`, motivo: `ninguna casa cotiza ${familiaExtra} completo` });
+                    return;
+                }
+                markets.push({
+                    id: `${id}|${familiaExtra}|FULL_TIME`,
+                    matchId: id,
+                    kind: ids.length === 3 ? 'THREE_WAY' : 'BINARY',
+                    family: familiaExtra,
+                    outcomes: ids.map(([oid, label]) => ({ id: oid, label, quotes: porSal.get(oid) })),
+                    complete: true,
+                    period: 'FULL_TIME',
+                    normalisationTarget: target,
+                    ...(empezado ? { live: true } : {}),
+                });
+            };
+            // El objetivo 2 de la doble oportunidad no es un detalle: es la diferencia
+            // entre una probabilidad correcta y una a la mitad.
+            extra('DC', doc.dobleOportunidad, [['1X', 'Local o empate'], ['12', 'Local o visitante'], ['X2', 'Empate o visitante']], 2);
+            extra('DNB', doc.empateNoValido, [['HOME', 'Local (empate no valido)'], ['AWAY', 'Visitante (empate no valido)']], 1);
+        }
+        else if (doc.dobleOportunidad !== undefined || doc.empateNoValido !== undefined) {
+            warnings.push(`[${id}] Doble oportunidad y empate no valido necesitan un mercado con empate; este partido es de dos vias. Se ignoran.`);
+        }
     }
     return { matches, markets, dropped, warnings };
 }
@@ -192,7 +243,7 @@ export function analysePanel(req) {
             partidos: 0, mercados: 0, descartados: ad.dropped,
             selecciones: [], apostables: [], candidatas: [], rechazos: [],
             veredicto: 'NO HAY NINGUNA CUOTA UTILIZABLE. Sin mercado que analizar no hay nada que proponer, y proponer algo de todas formas seria inventarlo.',
-            hayVentaja: false, rejillas: [], nodos: 0, presupuestoAgotado: false,
+            hayVentaja: false, rejillas: [], incoherencias: [], nodos: 0, presupuestoAgotado: false,
             avisos: ad.warnings, ms: Date.now() - t0,
         };
     }
@@ -271,6 +322,29 @@ export function analysePanel(req) {
     else {
         veredicto = `NO EXISTE COMBINACION VERDE CON SUFICIENTE CONFIANZA. Se han evaluado ${candidatas.length} combinacion(es) que llegan a la cuota ${req.targetOdds.toFixed(4)} y ninguna pasa los filtros del motor.`;
     }
+    // Umbral: 1,5 puntos de probabilidad. Por debajo es ruido de redondeo de la
+    // propia casa (cotiza a dos decimales); por encima es un precio que no cuadra
+    // con el que ella misma pone en el mercado de al lado.
+    const incoherencias = [];
+    for (const [matchId, rep] of built.coherence) {
+        const m = partidoDe.get(matchId);
+        for (const c of rep.checks) {
+            if (Math.abs(c.deltaPoints) < 0.015)
+                continue;
+            incoherencias.push({
+                partidoId: matchId,
+                partido: m === undefined ? matchId : `${m.home} – ${m.away}`,
+                mercado: c.market, salida: c.outcome,
+                implica: c.implied, cotiza: c.observed,
+                puntos: c.deltaPoints,
+                ventajaSiManda1X2: c.edgeIfObservedIsRight,
+                // El signo dice de que lado cae. Si el mercado cotiza MENOS
+                // probabilidad de la que implica el 1X2, paga mas de lo que deberia.
+                lado: c.deltaPoints < 0 ? 'a favor' : 'en contra',
+            });
+        }
+    }
+    incoherencias.sort((a, b) => Math.abs(b.puntos) - Math.abs(a.puntos));
     return {
         generadoEn: now,
         cuotaObjetivo: req.targetOdds,
@@ -285,6 +359,7 @@ export function analysePanel(req) {
         veredicto,
         hayVentaja: conVentaja.length > 0,
         rejillas: [...built.grids.keys()],
+        incoherencias,
         nodos: built.optimisation.stats.nodesExplored,
         presupuestoAgotado: built.optimisation.stats.budgetExhausted,
         avisos: [...ad.warnings, ...built.warnings, ...built.optimisation.warnings],

@@ -63,6 +63,8 @@ El formato es este (hay una plantilla en `datos/plantilla-cuotas.json`):
 | `comienza` | Hora local sin zona (`2026-09-20T21:00`) o con zona (`2026-09-20T19:00:00Z`). No pongas la hora UTC sin la `Z`, porque saldría desplazada. |
 | `tipo` | `1x2`, o `2v` si solo hay dos resultados (tenis, NBA…). En `2v` la cuota del medio va a `0`. |
 | `casas` | `[["Bet365", cuota 1, cuota X, cuota 2]]`, en decimal y con punto. |
+| `dobleOportunidad` | Opcional. `[["Bet365", cuota 1X, cuota 12, cuota X2]]`. Solo en `1x2`. |
+| `empateNoValido` | Opcional. `[["Bet365", cuota 1, cuota 2]]`. Solo en `1x2`. |
 | `apertura` | Opcional. La cuota de apertura, que es la referencia del % de movimiento. Si falta, se compara con la primera lectura cargada. |
 | `id` | Opcional. Si no lo pones, se saca de los equipos y el día. |
 | `actualizado` | Opcional. Cuándo se copiaron las cuotas (si no lo pones, se toma la hora de la carga). Un partido ya empezado no enseña cuotas copiadas antes del comienzo. |
@@ -132,10 +134,35 @@ hace es decir **por qué**, candidata a candidata, y qué haría falta cargar:
 
 | Si cargas… | Se enciende |
 |---|---|
-| doble oportunidad o empate no válido | detección de precios mal puestos sin necesidad de otra casa |
+| **doble oportunidad y empate no válido** | ✅ **ya está**: detección de precios mal puestos sin necesidad de otra casa |
 | más de / menos de y ambos marcan | el modelo de marcadores: correlación calculada, no acotada |
 | una segunda casa | el eje de valor entero (consenso, dispersión, EV) |
 | la cuota de cierre | el CLV, que es lo que antes dice si una estrategia vale |
+
+### Precios que no cuadran
+
+Si cargas `dobleOportunidad` o `empateNoValido`, el motor los contrasta contra
+el 1X2 de la misma casa. Las tres son la misma distribución escrita de tres
+formas:
+
+```
+DC(1X) = P(1) + P(X)        DC(12) = P(1) + P(2)       DC(X2) = P(X) + P(2)
+DNB(1) = P(1) / (P(1) + P(2))
+```
+
+Si no dan lo mismo, una está mal cotizada, y la pestaña Apuestas lo enseña con
+cuánto se separan y de qué lado cae. **Es lo único de este panel que puede
+encontrar algo con una sola casa**: no compara Bet365 contra otra casa, compara
+Bet365 contra sí misma.
+
+Dos avisos que van en pantalla y conviene repetir aquí:
+
+- **Es una señal, no una apuesta.** Que dos precios no cuadren dice que uno está
+  mal, no cuál. Apostar el generoso supone que el 1X2 es el correcto.
+- **Cargar estos dos mercados NO mejora el modelo de marcadores.** Al ser la
+  misma información escrita de otra forma, entre los tres no pasan de dos
+  ecuaciones independientes, y la rejilla tiene tres parámetros. Para eso hacen
+  falta familias de verdad distintas: más de/menos de, ambos marcan, hándicaps.
 
 ## Diferencias con la versión de claude.ai
 

@@ -6,7 +6,28 @@ import { oddsQualityScore } from './quality/index.js';
 import { classifyBinary, classifyThreeWay, classifyValue } from './classify/index.js';
 import { fitGridFromMarkets } from './correlation/scoreGrid.js';
 import { parsePredicate } from './correlation/predicates.js';
+import { checkCoherence } from './market/coherence.js';
 import { optimiseCombinations } from './optimize/index.js';
+/**
+ * 1X2, doble oportunidad y empate no valido NO son tres mercados: son la MISMA
+ * distribucion del resultado escrita de tres maneras.
+ *
+ *   DC(1X) = P(1) + P(X)      DC(12) = P(1) + P(2)     DC(X2) = P(X) + P(2)
+ *   DNB(1) = P(1) / (P(1) + P(2))
+ *
+ * Consecuencia para el ajuste de la rejilla de marcadores: las tres juntas
+ * aportan como mucho DOS ecuaciones independientes sobre (lambda, mu, rho),
+ * exactamente las mismas dos que aporta el 1X2 solo. Contarlas por separado
+ * haria creer al motor que tiene cuatro o cinco restricciones cuando tiene dos,
+ * y volveria a ajustar tres parametros con informacion para menos: es el mismo
+ * fallo que el deduplicado roto, en version mas dificil de ver.
+ *
+ * Lo que SI aportan es otra cosa, y es valiosa: como la casa las cotiza por
+ * separado, la discrepancia entre ellas delata un precio mal puesto SIN
+ * necesidad de una segunda casa. Eso lo mide `checkCoherence`, no el ajuste.
+ */
+export const FAMILIAS_DEL_RESULTADO = new Set(['1X2', 'DC', 'DNB']);
+const CUPO_RESULTADO = 2;
 /**
  * Clave canonica de la salida, para construir el predicado sobre el marcador.
  *
@@ -37,6 +58,16 @@ export function analyse(input, cfg = DEFAULT_CONFIG) {
     const warnings = [];
     const selections = [];
     const fitTargets = new Map();
+    /** Probabilidades fair del bloque del resultado, para el control de coherencia. */
+    const resultado = new Map();
+    const bloqueDe = (matchId) => {
+        let b = resultado.get(matchId);
+        if (b === undefined) {
+            b = { doubleChance: {}, drawNoBet: {} };
+            resultado.set(matchId, b);
+        }
+        return b;
+    };
     for (const market of input.markets) {
         const probs = computeMarketProbabilities(market, input.bookmaker, cfg, {
             ...(input.universe !== undefined ? { universe: input.universe } : {}),
@@ -105,6 +136,34 @@ export function analyse(input, cfg = DEFAULT_CONFIG) {
                 evBasis: value.basis,
                 warnings: selWarnings,
             });
+            // Bloque del resultado, para contrastar 1X2 contra DC y DNB despues.
+            if (probs.validation.usable && (market.period ?? 'FULL_TIME') === 'FULL_TIME') {
+                const b = bloqueDe(market.matchId);
+                if (market.family === '1X2') {
+                    const t = b.threeWay ?? { home: NaN, draw: NaN, away: NaN };
+                    if (o.outcomeId === 'HOME')
+                        t.home = o.fair;
+                    if (o.outcomeId === 'DRAW')
+                        t.draw = o.fair;
+                    if (o.outcomeId === 'AWAY')
+                        t.away = o.fair;
+                    b.threeWay = t;
+                }
+                else if (market.family === 'DC') {
+                    if (o.outcomeId === '1X')
+                        b.doubleChance.homeOrDraw = o.fair;
+                    if (o.outcomeId === '12')
+                        b.doubleChance.homeOrAway = o.fair;
+                    if (o.outcomeId === 'X2')
+                        b.doubleChance.drawOrAway = o.fair;
+                }
+                else if (market.family === 'DNB') {
+                    if (o.outcomeId === 'HOME')
+                        b.drawNoBet.home = o.fair;
+                    if (o.outcomeId === 'AWAY')
+                        b.drawNoBet.away = o.fair;
+                }
+            }
             // Objetivo para ajustar la rejilla de marcadores del partido.
             // SOLO mercados de partido completo: la rejilla modela el marcador final.
             // Un mercado de 1a parte NO se puede evaluar sobre ella, y meterlo en el
@@ -138,10 +197,13 @@ export function analyse(input, cfg = DEFAULT_CONFIG) {
         const independent = targets.filter((t) => {
             const fam = t.key.split(':')[0];
             const line = t.key.includes('@') ? t.key.slice(t.key.indexOf('@')) : '';
-            const k = `${fam}${line}`;
+            // 1X2, DC y DNB comparten cupo: son la misma distribucion del resultado
+            // escrita de tres formas, y entre las tres no pasan de dos ecuaciones.
+            const enBloque = FAMILIAS_DEL_RESULTADO.has(fam);
+            const k = enBloque ? 'RESULTADO' : `${fam}${line}`;
             const count = seen.get(k) ?? 0;
             seen.set(k, count + 1);
-            return count < (fam === '1X2' ? 2 : 1);
+            return count < (enBloque ? CUPO_RESULTADO : 1);
         });
         const fit = fitGridFromMarkets(independent);
         if (fit !== null && fit.converged) {
@@ -153,7 +215,33 @@ export function analyse(input, cfg = DEFAULT_CONFIG) {
             warnings.push(`[${matchId}] No se pudo ajustar la distribucion de marcadores (${independent.length} mercados independientes, hacen falta 3). Las combinadas de este partido usaran cotas, no calculo.`);
         }
     }
-    return { selections, grids, gridFits, warnings };
+    // --- Coherencia del bloque del resultado ---
+    // Es la unica deteccion de precios mal puestos que NO necesita una segunda
+    // casa: si 1X2, doble oportunidad y empate no valido no dan las mismas
+    // probabilidades, una de las tres esta mal cotizada.
+    const coherence = new Map();
+    for (const [matchId, b] of resultado) {
+        const t = b.threeWay;
+        if (t === undefined || !Number.isFinite(t.home + t.draw + t.away))
+            continue;
+        const tieneDC = Object.values(b.doubleChance).some((x) => x !== undefined);
+        const tieneDNB = Object.values(b.drawNoBet).some((x) => x !== undefined);
+        if (!tieneDC && !tieneDNB)
+            continue;
+        const input = {
+            threeWay: t,
+            ...(tieneDC ? { doubleChance: b.doubleChance } : {}),
+            ...(tieneDNB ? { drawNoBet: b.drawNoBet } : {}),
+        };
+        const rep = checkCoherence(input);
+        coherence.set(matchId, rep);
+        if (rep.incoherent) {
+            const peor = [...rep.checks].sort((x, y) => Math.abs(y.deltaPoints) - Math.abs(x.deltaPoints))[0];
+            warnings.push(`[${matchId}] Los mercados del resultado no cuadran entre si: ${(rep.maxDeltaPoints * 100).toFixed(1)} puntos de diferencia` +
+                (peor === undefined ? '.' : ` en ${peor.market} ${peor.outcome} (el 1X2 implica ${(peor.implied * 100).toFixed(1)} % y ese mercado cotiza ${(peor.observed * 100).toFixed(1)} %). Uno de los dos precios esta mal puesto.`));
+        }
+    }
+    return { selections, grids, gridFits, coherence, warnings };
 }
 /** Analisis completo + construccion de la combinada. */
 export function buildCombinations(input, cfg = DEFAULT_CONFIG, opts = {}) {

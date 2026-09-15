@@ -23,7 +23,22 @@
         3.5,
         3.4
       ],
-      "actualizado": "2026-09-14T10:30:00Z"
+      "actualizado": "2026-09-14T10:30:00Z",
+      "dobleOportunidad": [
+        [
+          "Bet365",
+          1.33,
+          1.36,
+          1.82
+        ]
+      ],
+      "empateNoValido": [
+        [
+          "Bet365",
+          1.51,
+          2.65
+        ]
+      ]
     },
     {
       "deporte": "Fútbol",

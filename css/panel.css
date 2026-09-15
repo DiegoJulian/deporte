@@ -525,6 +525,26 @@ tr.aqui td{background:var(--accent-soft)}
 .pata .pl[data-riesgo="EXTREMA"]{color:var(--warn)}
 .pata .pl[data-riesgo="MUY_BAJA"]{color:var(--neg)}
 
+/* Precios de la misma casa que no cuadran entre sí. Es lo único que puede
+   encontrar algo con una sola casa cargada, así que se marca, pero con el
+   borde de aviso y no con el verde de «apuesta esto»: es una señal. */
+.cand[data-incoh="1"]{border-color:var(--warn)}
+.incohs{display:grid; gap:1px; background:var(--line); border-top:1px solid var(--line)}
+.incoh{display:grid; grid-template-columns:minmax(110px,1.6fr) minmax(130px,1.4fr) 104px 104px 78px 74px;
+  gap:8px; align-items:baseline; padding:8px 13px; background:var(--surface-2); font-size:13px}
+.incoh .ip{font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.incoh .im{color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.incoh .iv{font-family:var(--f-mono); font-size:12px; color:var(--ink-2); white-space:nowrap}
+.incoh .id, .incoh .ie{font-family:var(--f-mono); font-weight:500; text-align:right; white-space:nowrap}
+@media (max-width:640px){
+  .incoh{grid-template-columns:1fr auto; row-gap:2px}
+  .incoh .ip{grid-column:1/-1}
+  .incoh .im{grid-column:1}
+  .incoh .ie{grid-column:2; grid-row:2}
+  .incoh .iv{font-size:11px}
+  .incoh .id{text-align:left}
+}
+
 .motor-rech, .motor-ok, .motor-diag{border-top:1px solid var(--line); padding:9px 13px; font-size:13px; line-height:1.5}
 .motor-rech{background:var(--neg-soft); color:var(--ink)}
 .motor-ok{background:var(--pos-soft); color:var(--ink)}

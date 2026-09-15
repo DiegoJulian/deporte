@@ -386,9 +386,49 @@ function renderCandidatas(){
 
   cont.innerHTML = '<div class="plan-blk">' + cabecera + '<div class="cands">'
     + bloqueVeredicto(a)
+    + bloqueIncoherencias(a)
     + (a.candidatas.length ? a.candidatas.slice(0, 6).map(c => tarjetaMotor(c, a, e)).join('') : '')
     + bloqueDiagnostico(a)
     + '</div></div>';
+}
+
+/* ===================== PRECIOS QUE NO CUADRAN =====================
+   1X2, doble oportunidad y empate no válido son la MISMA distribución escrita
+   de tres formas: DC(1X) = P(1) + P(X), DNB(1) = P(1)/(P(1)+P(2)). Si las tres
+   no dan las mismas probabilidades, una está mal cotizada.
+
+   Es lo único de este panel que puede encontrar algo con UNA sola casa: no
+   compara Bet365 contra otra casa, compara Bet365 contra sí misma.
+
+   Y es una señal, no un veredicto. Que dos precios no cuadren dice que uno de
+   los dos está mal, no cuál. Apostar el que parece generoso supone que el 1X2
+   es el bueno, y esa suposición no la ha verificado nadie. */
+function bloqueIncoherencias(a){
+  if (!a.incoherencias || !a.incoherencias.length) return '';
+  const filas = a.incoherencias.slice(0, 6).map(i => {
+    const nombre = i.mercado === 'DC' ? 'Doble oportunidad' : 'Empate no válido';
+    return '<div class="incoh" data-lado="' + esc(i.lado) + '">'
+      + '<span class="ip">' + esc(i.partido) + '</span>'
+      + '<span class="im">' + esc(nombre) + ' · ' + esc(i.salida) + '</span>'
+      + '<span class="iv" title="Lo que implica el 1X2 de la misma casa">implica ' + pctP(i.implica, 1) + '</span>'
+      + '<span class="iv" title="Lo que cotiza de verdad ese mercado">cotiza ' + pctP(i.cotiza, 1) + '</span>'
+      + '<span class="id ' + (i.lado === 'a favor' ? 'pos' : 'neg') + '">'
+        + (i.puntos > 0 ? '+' : '−') + nf(Math.abs(i.puntos) * 100, 1) + ' pts</span>'
+      + '<span class="ie ' + (i.ventajaSiManda1X2 > 0 ? 'pos' : 'neg') + '" title="Ventaja por euro de apostar ese precio SI el 1X2 es el que está bien. Cuál de los dos es el correcto no lo sabe nadie.">'
+        + pctS(i.ventajaSiManda1X2) + '</span>'
+      + '</div>';
+  }).join('');
+  const aFavor = a.incoherencias.filter(i => i.lado === 'a favor').length;
+  return '<div class="cand" data-incoh="1">'
+    + '<div class="cand-hd"><b>Precios que no cuadran entre sí</b>'
+      + '<small>' + a.incoherencias.length + ' desajuste(s) · misma casa</small></div>'
+    + '<div class="incohs">' + filas + '</div>'
+    + '<div class="cand-pie">La misma casa cotiza el resultado en tres mercados que tienen que dar lo mismo, y no lo dan. '
+      + (aFavor ? '<b>' + aFavor + ' desajuste(s) caen a favor</b>: esos precios pagan más de lo que implica el 1X2. ' : '')
+      + '<b>Esto es una señal, no una apuesta.</b> Que dos precios no cuadren dice que uno está mal, no cuál: '
+      + 'apostar el generoso supone que el 1X2 es el bueno, y eso no lo ha verificado nadie. '
+      + 'Comprueba primero que las tres cuotas son de la misma lectura y que siguen vivas en la casa.</div>'
+    + '</div>';
 }
 
 /* El veredicto del motor, arriba del todo y sin suavizar. */

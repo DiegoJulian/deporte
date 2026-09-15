@@ -93,6 +93,9 @@ async function pedir(ruta, opciones = {}) {
 function validarPartido(p, i) {
   const nombre = esObjeto(p) && p.local ? `${p.local} – ${p.visitante}` : `partido ${i + 1}`;
   const mal = motivo => ({ error: `${nombre}: ${motivo}` });
+  // Avisos: lo que no impide cargar pero conviene saber antes de no ver nada
+  // en el panel. Van aparte del documento, que se escribe tal cual en la base.
+  const avisos = [];
   if (!esObjeto(p)) return mal('no es un objeto');
 
   const d = { ...p };
@@ -122,6 +125,35 @@ function validarPartido(p, i) {
     const ok = Array.isArray(a) && a.length === 3 && cuotaOk(a[0]) && cuotaOk(a[2]) && (d.tipo === '1x2' ? cuotaOk(a[1]) : a[1] === 0);
     if (!ok) return mal('«apertura» va como [cuota 1, cuota X, cuota 2] (en "2v", la X a 0)');
   }
+
+  /* Los otros dos mercados del resultado. No son mercados nuevos: son el MISMO
+     resultado escrito de otra forma, y ahí está su valor. Como la casa los
+     cotiza por separado, contrastarlos contra el 1X2 delata un precio mal
+     puesto sin necesidad de una segunda casa. Los dos son opcionales. */
+  for (const [campo, n, forma] of [
+    ['dobleOportunidad', 4, '["Bet365", cuota 1X, cuota 12, cuota X2]'],
+    ['empateNoValido', 3, '["Bet365", cuota 1, cuota 2]']
+  ]) {
+    if (d[campo] == null) continue;
+    if (d.tipo !== '1x2') return mal(`«${campo}» necesita un partido con empate; este es de tipo "2v"`);
+    if (!Array.isArray(d[campo]) || !d[campo].length) return mal(`«${campo}» va como [${forma}, …]`);
+    for (const c of d[campo]) {
+      if (!Array.isArray(c) || c.length !== n || typeof c[0] !== 'string' || !c[0].trim()) {
+        return mal(`cada casa de «${campo}» va como ${forma}`);
+      }
+      if (!c.slice(1).every(cuotaOk)) return mal(`cuotas no válidas en «${campo}» (${c[0]}): van entre 1,01 y 1.000, con punto decimal`);
+    }
+    /* Aviso, no error: la doble oportunidad suma 2 porque 1X + 12 + X2 cubre
+       cada resultado dos veces. Si la suma de las inversas baja de 2, la propia
+       casa se está arbitrando y el motor tumbará el bloque entero. Mejor
+       enterarse al cargar que al no ver nada en el panel. */
+    if (campo === 'dobleOportunidad') {
+      for (const c of d[campo]) {
+        const s = c.slice(1).reduce((a, x) => a + 1 / x, 0);
+        if (s < 2) avisos.push(`${nombre}: la doble oportunidad de ${c[0]} suma ${(s * 100).toFixed(1)} %, por debajo del 200 % que le corresponde. El motor la descartará por margen negativo.`);
+      }
+    }
+  }
   if (d.marcador != null) {
     const m = d.marcador;
     if (!(Array.isArray(m) && m.length === 2 && m.every(g => Number.isInteger(g) && g >= 0))) return mal('«marcador» va como [goles local, goles visitante]');
@@ -137,7 +169,7 @@ function validarPartido(p, i) {
   if (new Date(d.actualizado).getTime() > Date.now() + 120000) return mal('«actualizado» va por delante del reloj');
 
   if (d.id != null && (typeof d.id !== 'string' || !ID_OK.test(d.id))) return mal(`el id «${d.id}» no vale (letras, números y _ . - ~ : @ +)`);
-  return { d };
+  return { d, avisos };
 }
 
 function validarEquipoNba(t, i) {
@@ -192,7 +224,16 @@ async function main() {
 
   // --- mercado
   const buenos = [], errores = [];
-  partidos.forEach((p, i) => { const r = validarPartido(p, i); if (r.error) errores.push(r.error); else buenos.push(r.d); });
+  const avisosCarga = [];
+  partidos.forEach((p, i) => {
+    const r = validarPartido(p, i);
+    if (r.error) errores.push(r.error);
+    else { buenos.push(r.d); if (r.avisos) avisosCarga.push(...r.avisos); }
+  });
+  if (avisosCarga.length) {
+    console.log('');
+    for (const a of avisosCarga) console.log(`  Aviso · ${a}`);
+  }
 
   const estado = await pedir('api/estado');
   if (!estado || estado.app !== 'cuota-justa') salir(`${op.servidor} no es servidor.mjs.`);

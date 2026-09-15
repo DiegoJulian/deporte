@@ -35,6 +35,15 @@ export interface DocMercado {
     readonly casas?: readonly (readonly [string, number, number, number])[];
     /** Cuota de apertura. Corresponde a `casas[0]`, como en `movimiento()`. */
     readonly apertura?: readonly number[];
+    /**
+     * Doble oportunidad: `[[nombre, cuota 1X, cuota 12, cuota X2]]`.
+     * OJO: sus probabilidades justas suman 2, no 1 — 1X + 12 + X2 cubre cada
+     * resultado dos veces. El motor lo sabe (`normalisationTarget: 2`);
+     * normalizarla a 1 daria probabilidades a la mitad de lo que valen.
+     */
+    readonly dobleOportunidad?: readonly (readonly [string, number, number, number])[];
+    /** Empate no valido: `[[nombre, cuota 1, cuota 2]]`. El empate devuelve. */
+    readonly empateNoValido?: readonly (readonly [string, number, number])[];
     readonly actualizado?: string;
     readonly marcador?: readonly number[];
 }
@@ -103,6 +112,31 @@ export interface PanelCandidate {
      */
     readonly rechazos: readonly string[];
 }
+/**
+ * Un desajuste entre 1X2, doble oportunidad y empate no valido del mismo
+ * partido. Las tres son la misma distribucion: si no dan lo mismo, una esta mal
+ * cotizada. Es la unica deteccion de precio mal puesto que funciona con UNA
+ * sola casa, que es la situacion real de este panel.
+ */
+export interface PanelIncoherencia {
+    readonly partidoId: string;
+    readonly partido: string;
+    readonly mercado: string;
+    readonly salida: string;
+    /** Lo que implica el 1X2. */
+    readonly implica: number;
+    /** Lo que cotiza de verdad ese mercado. */
+    readonly cotiza: number;
+    readonly puntos: number;
+    /**
+     * Ventaja por euro de apostar ESE precio suponiendo que el 1X2 es el que esta
+     * bien y el otro mercado el mal cotizado. Positiva = la casa paga de mas.
+     * (Cual de los dos es el correcto no lo sabe nadie: por eso es una senal que
+     * hay que contrastar, no un veredicto.)
+     */
+    readonly ventajaSiManda1X2: number;
+    readonly lado: 'a favor' | 'en contra';
+}
 export interface PanelAnalysisResponse {
     readonly generadoEn: number;
     readonly cuotaObjetivo: number;
@@ -125,6 +159,8 @@ export interface PanelAnalysisResponse {
     readonly veredicto: string;
     readonly hayVentaja: boolean;
     readonly rejillas: readonly string[];
+    /** Desajustes del bloque del resultado, el mas gordo primero. */
+    readonly incoherencias: readonly PanelIncoherencia[];
     readonly nodos: number;
     readonly presupuestoAgotado: boolean;
     readonly avisos: readonly string[];
