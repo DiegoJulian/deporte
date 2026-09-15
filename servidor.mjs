@@ -150,6 +150,78 @@ function borrar(col, id) {
   return true;
 }
 
+/* ================================================================ el motor
+   `odds-engine` aplica las reglas duras: quitar el margen con cinco métodos,
+   calidad del dato, origen de la probabilidad, correlación entre patas,
+   confianza y ventaja real de Kelly. Corre AQUÍ y no en el navegador porque
+   ajustar la distribución de marcadores cuesta ~43 ms por partido, y eso en un
+   móvil se convierte en varios segundos de pantalla congelada.
+
+   Se carga a la primera petición y no al arrancar: así `node servidor.mjs`
+   sigue funcionando en un clon recién bajado que todavía no ha compilado el
+   motor, que es lo que promete el LEEME. Si no está, se dice por qué. */
+const MOTOR_RUTA = './odds-engine/dist/adapters/panel.js';
+let motor = null;
+let motorFallo = null;
+
+async function cargarMotor() {
+  if (motor || motorFallo) return motor;
+  try {
+    motor = await import(MOTOR_RUTA);
+  } catch (e) {
+    motorFallo = 'No está compilado. Ejecuta: cd odds-engine && npm install && npm run build';
+    log('motor no disponible → ' + motorFallo);
+  }
+  return motor;
+}
+
+/* La respuesta se guarda en caché por contenido de `mercado` + cuota objetivo.
+   La base solo cambia cuando alguien escribe, así que sin esto cada pulsación
+   del botón de refresco recalcularía la jornada entera para nada. */
+const cacheAnalisis = new Map();
+const LIM_CACHE = 24;
+
+function firmaMercado() {
+  return JSON.stringify(listar('mercado'));
+}
+
+async function analisis(req, res) {
+  const m = await cargarMotor();
+  if (!m) return json(res, 503, { code: 'motor_no_disponible', detalle: motorFallo });
+
+  const p = await cuerpoJson(req, LIM_DB);
+  const objetivo = Number(p && p.targetOdds);
+  if (!isFinite(objetivo) || objetivo <= 1) {
+    return json(res, 400, { code: 'error', detalle: 'targetOdds tiene que ser una cuota decimal mayor que 1' });
+  }
+
+  const docs = listar('mercado').map(d => ({ id: d.id, ...d.data }));
+  const clave = objetivo.toFixed(6) + '|' + (p && p.horizonHours) + '|' + firmaMercado();
+  const guardado = cacheAnalisis.get(clave);
+  if (guardado) return json(res, 200, { ...guardado, cacheado: true });
+
+  const t = Date.now();
+  let salida;
+  try {
+    salida = m.analysePanel({
+      docs,
+      targetOdds: objetivo,
+      bookmaker: (p && p.bookmaker) || 'Bet365',
+      universe: (p && p.universe) === 'all' ? 'all' : 'top',
+      ...(p && isFinite(Number(p.horizonHours)) ? { horizonHours: Number(p.horizonHours) } : {}),
+      ...(p && isFinite(Number(p.maxLegs)) ? { maxLegs: Number(p.maxLegs) } : {}),
+    });
+  } catch (e) {
+    console.error(e);
+    return json(res, 500, { code: 'error', detalle: 'el motor no pudo completar el análisis: ' + (e && e.message) });
+  }
+
+  log(`motor → cuota ${objetivo.toFixed(4)}: ${docs.length} partidos, ${salida.candidatas.length} combinaciones, ${salida.apostables.length} apostables (${Date.now() - t} ms)`);
+  cacheAnalisis.set(clave, salida);
+  while (cacheAnalisis.size > LIM_CACHE) cacheAnalisis.delete(cacheAnalisis.keys().next().value);
+  return json(res, 200, salida);
+}
+
 /* ================================================================ eventos
    Server-Sent Events: cada escritura en una colección se manda entera a todas las
    pestañas abiertas. Es el «oyente en vivo» que el panel tenía en claude.ai. */
@@ -327,11 +399,15 @@ async function api(req, res, ruta) {
     return json(res, 200, {
       ok: true, app: 'cuota-justa', version: 1,
       lectura: !!CLAVE, modelo: CLAVE ? MODELO : null,
+      // El panel pregunta esto para saber si puede pedir análisis del motor o si
+      // tiene que seguir con sus propias cuentas.
+      motor: !!(await cargarMotor()), motorFallo,
       imagenes: { tipos: TIPOS_IMG, maxBytes: MAX_IMG_BYTES, maxImagenes: MAX_IMGS }
     });
   }
   if (que === 'eventos' && partes.length === 1 && m === 'GET') return eventos(req, res);
   if (que === 'leer' && partes.length === 1 && m === 'POST') return leer(req, res);
+  if (que === 'analisis' && partes.length === 1 && m === 'POST') return analisis(req, res);
 
   if (que === 'db') {
     if (!COL_OK.test(col || '') || sobra !== undefined) {
