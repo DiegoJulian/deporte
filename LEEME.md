@@ -30,7 +30,51 @@ Después abre **http://localhost:8787**.
 
 El panel no sale a buscar cuotas: pinta lo que hay en su base. Mientras no cargues nada, el Mercado enseña **datos de ejemplo** y lo avisa arriba.
 
-Con el servidor arrancado:
+### Lo más rápido: escribirlas en texto
+
+`capturar-cuotas.mjs` convierte cuotas escritas a mano en el JSON de carga, y de
+paso comprueba el margen y la coherencia **mientras todavía tienes la casa
+abierta en el navegador**, que es el único momento en que puedes corregir un
+error de tecleo.
+
+```
+node capturar-cuotas.mjs --ejemplo                 # el formato, con ejemplos
+node capturar-cuotas.mjs cuotas.txt                # → datos/captura-<fecha>.json
+node cargar-cuotas.mjs datos/captura-*.json
+```
+
+Un `cuotas.txt` es esto:
+
+```
+LIGA España - LaLiga
+Real Sociedad - Atlético de Madrid   20/09 21:00
+1X2  3.40 3.60 2.05
+DC   1.84 1.32 1.35
+DNB  2.60 1.52
+
+Arsenal - Everton   21/09 16:00
+1X2  1.58 4.10 6.20
+```
+
+`LIGA` y `DEPORTE` son opcionales y se pegan hasta que escribas otra. La fecha
+admite `20/09 21:00`, `2026-09-20T21:00`, `hoy 21:00` y `mañana 16:30`.
+
+Lo que **avisa** antes de que cargues nada:
+
+- margen del 1X2 fuera de lo que cotiza Bet365 (4-6 %): normalmente es un dígito
+  cambiado;
+- doble oportunidad que suma menos del 200 %, que el motor descartaría entera;
+- 1X2 y doble oportunidad o empate no válido que **no cuadran entre sí**.
+
+Ese último no siempre es un error de tecleo: puede ser el precio mal puesto que
+buscas. Por eso conviene copiar los tres mercados **de la misma lectura** — si
+copias el 1X2 a las 18:00 y la doble oportunidad a las 18:05 con la línea
+movida, saldrá un desajuste que no existe.
+
+Y lo que **no** puede cazar: un 3,40 tecleado como 3,45 deja el margen normal y
+no hay forma de verlo mirando cuotas. Contra eso, el control de coherencia.
+
+### A mano, o desde otro programa
 
 ```
 node cargar-cuotas.mjs mis-cuotas.json             # carga
@@ -83,6 +127,7 @@ js/claude-local.js    hace de window.claude (lo que daba claude.ai) hablando con
 js/motor.js           pide los análisis al motor y traduce sus etiquetas
 js/01…13-*.js         la lógica, por partes, cargada en ese orden
 servidor.mjs          sirve la página, guarda la base, lee los boletos y corre el motor
+capturar-cuotas.mjs   pasa cuotas escritas en texto al JSON de carga
 cargar-cuotas.mjs     mete cuotas en la base
 odds-engine/          el motor de probabilidad y combinadas (TypeScript, se compila)
 datos/                la base (base.json, se crea sola) y la plantilla
