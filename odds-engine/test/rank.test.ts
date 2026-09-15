@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { kellyGrowth, marketPrior, rankCombination, compareCombinations, type Rankable } from '../src/rank/index.js';
+import { kellyGrowth, marketPrior, combinedMarketPrior, rankCombination, compareCombinations, type Rankable } from '../src/rank/index.js';
 
 test('sin ventaja, Kelly no apuesta y el crecimiento es cero', () => {
   const r = kellyGrowth(0.49, 2.0);
@@ -78,4 +78,40 @@ test('el desempate sigue el orden de prioridades del encargo', () => {
   const masConf = mk(3, 'LOW', 90);
   const menosConf = mk(3, 'LOW', 60);
   assert.ok(compareCombinations(masConf, menosConf) < 0, 'mas confianza primero');
+});
+
+/* ------------------------------------------------------------------------
+   El prior de una combinada se compone pata a pata. Leer la banda de la cuota
+   TOTAL es extrapolar una tabla medida sobre simples, y siempre hacia el lado
+   malo: subestima el peaje y la combinada parece mejor de lo que es.
+   ------------------------------------------------------------------------ */
+test('el prior de una combinada compone el peaje de cada pata, no lee la banda de la cuota total', () => {
+  const patas = [1.62, 1.62, 1.62];                 // ~4,25 de cuota combinada
+  const combinada = patas.reduce((a, b) => a * b, 1);
+
+  const compuesto = combinedMarketPrior(patas, 'all');
+  const extrapolado = marketPrior(combinada, 'all');
+
+  // Tres peajes de la banda 1,55-1,70 (-3,46 % cada uno) pesan mas que uno solo
+  // de la banda 3,30-4,50 (-8,10 %): 0,9654^3 = 0,8998 frente a 0,9190.
+  assert.ok(compuesto < extrapolado,
+    `el prior compuesto (${compuesto}) tiene que ser MENOR que el extrapolado (${extrapolado})`);
+
+  // Y tiene que valer exactamente el producto de los priores de cada pata.
+  const aMano = patas.reduce((a, o) => a * marketPrior(o, 'all'), 1);
+  assert.ok(Math.abs(compuesto - aMano) < 1e-12);
+});
+
+test('pasar legOdds baja el EV de la combinada: deja de regalarse peaje', () => {
+  const base = {
+    adjustedJointProbability: 0.235, adjustedLowerBound: 0.22,
+    combinedOdds: 4.25, confidence: 40, correlationRisk: 'LOW' as const,
+    legs: 3, compoundMargin: 0.10,
+  };
+  const sinPatas = rankCombination(base);
+  const conPatas = rankCombination({ ...base, legOdds: [1.62, 1.62, 1.62] });
+
+  assert.ok(conPatas.posteriorProbability < sinPatas.posteriorProbability);
+  assert.ok(conPatas.expectedValue < sinPatas.expectedValue,
+    'con el peaje compuesto bien contado, el EV solo puede bajar');
 });

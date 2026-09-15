@@ -43,6 +43,12 @@ export interface RankInput {
   /** Usar la cota inferior en vez del punto: modo conservador. */
   readonly conservative?: boolean;
   readonly universe?: 'all' | 'top';
+  /**
+   * Cuotas de cada pata. Cuando estan, el prior se compone pata a pata con la
+   * banda de cada una (lo correcto). Sin ellas se cae a `marketPrior` sobre la
+   * cuota combinada, que extrapola la tabla de simples y subestima el peaje.
+   */
+  readonly legOdds?: readonly number[];
 }
 
 export interface RankResult {
@@ -67,6 +73,33 @@ export function marketPrior(combinedOdds: number, universe: 'all' | 'top' = 'all
   return clamp((1 / combinedOdds) * (1 + edge), 1e-6, 0.999999);
 }
 
+/**
+ * Prior de mercado de una COMBINADA, pata a pata.
+ *
+ * `marketPrior` aplicado a la cuota combinada es una extrapolacion silenciosa:
+ * MARGIN_BANDS esta medida sobre apuestas SIMPLES de 1X2, y preguntarle por una
+ * cuota de 12,0 que en realidad son cuatro patas de 1,86 devuelve el peaje de
+ * la banda 4,50–8,00 (o el -18 % de fuera de rango) en vez del peaje compuesto
+ * que se paga de verdad. Y lo hace SIEMPRE en la direccion mala: subestima el
+ * peaje, con lo que el prior queda alto y la combinada parece mejor de lo que
+ * es. Justo el error que este motor existe para no cometer.
+ *
+ *     prior = prod_i  (1/cuota_i) * (1 + ventaja_de_su_banda)
+ *
+ * Cada pata se evalua en SU banda, que es donde la tabla si esta medida, y el
+ * peaje se compone N veces, que es como se cobra.
+ */
+export function combinedMarketPrior(legOdds: readonly number[], universe: 'all' | 'top' = 'all'): number {
+  if (legOdds.length === 0) return clamp(1e-6, 1e-6, 0.999999);
+  let p = 1;
+  for (const o of legOdds) {
+    const band = findBand(o);
+    const edge = band === null ? -0.18 : universe === 'top' ? band.edgeTop : band.edgeAll;
+    p *= (1 / o) * (1 + edge);
+  }
+  return clamp(p, 1e-9, 0.999999);
+}
+
 export function kellyGrowth(p: number, odds: number): { fraction: number; growth: number } {
   const b = odds - 1;
   if (b <= 0) return { fraction: 0, growth: 0 };
@@ -80,7 +113,10 @@ export function kellyGrowth(p: number, odds: number): { fraction: number; growth
 export function rankCombination(input: RankInput): RankResult {
   const w = clamp(input.confidence / 100, 0, 1);
   const pEstimate = input.conservative === true ? input.adjustedLowerBound : input.adjustedJointProbability;
-  const prior = marketPrior(input.combinedOdds, input.universe ?? 'all');
+  const universe = input.universe ?? 'all';
+  const prior = input.legOdds !== undefined && input.legOdds.length > 0
+    ? combinedMarketPrior(input.legOdds, universe)
+    : marketPrior(input.combinedOdds, universe);
   const posterior = clamp(w * pEstimate + (1 - w) * prior, 1e-9, 1 - 1e-9);
 
   const ev = posterior * input.combinedOdds - 1;

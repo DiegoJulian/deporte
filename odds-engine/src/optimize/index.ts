@@ -111,6 +111,8 @@ export function optimiseCombinations(
       correlationRisk: joint.correlation.risk,
       legs: sels.length,
       compoundMargin: joint.compoundMargin,
+      // Pata a pata: el peaje se compone, no se lee en la banda de la cuota total.
+      legOdds: sels.map((s) => s.odds as number),
       ...(opts.conservative !== undefined ? { conservative: opts.conservative } : {}),
       ...(opts.universe !== undefined ? { universe: opts.universe } : {}),
     });
